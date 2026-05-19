@@ -1,0 +1,39 @@
+@model CURSO_INTERCULTURALIDAD.Models.LoginAdminViewModel
+@{
+    ViewData["Title"] = "Panel Admin";
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+}
+
+<div class="admin-login-shell">
+    <div class="admin-login-card">
+        <span class="admin-eyebrow">INSNSB - Administración</span>
+        <h1>Panel de códigos únicos</h1>
+        <p>Ingresa con las credenciales para generar y revisar códigos INSNSB por curso.</p>
+
+        @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+        {
+            <div class="alert alert-danger">@Model.MensajeError</div>
+        }
+
+        <form asp-action="Login" method="post" class="admin-form-stack">
+            @Html.AntiForgeryToken()
+            <div>
+                <label asp-for="Usuario" class="form-label">Usuario</label>
+                <input asp-for="Usuario" class="form-control" autocomplete="username" />
+                <span asp-validation-for="Usuario" class="text-danger"></span>
+            </div>
+            <div>
+                <label asp-for="Clave" class="form-label">Clave</label>
+                <input asp-for="Clave" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Clave" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-brand">Entrar al panel</button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

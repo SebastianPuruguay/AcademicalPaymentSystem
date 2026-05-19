@@ -1,0 +1,230 @@
+@model CURSO_INTERCULTURALIDAD.Models.ReporteInscritosViewModel
+@{
+    ViewData["Title"] = "Reporte de inscritos";
+
+    static string Money(decimal value)
+    {
+        return value == 0m ? "--" : $"S/ {value:N2}";
+    }
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+}
+
+<div class="admin-shell">
+    <div class="admin-toolbar">
+        <div>
+            <span class="admin-eyebrow">INSNSB - Reportes</span>
+            <h1>Reporte de inscritos por curso</h1>
+            <p>Resumen para revisar inscritos, pre-inscritos, procedencia y avance de pagos por actividad academica.</p>
+        </div>
+
+        <div class="admin-toolbar-actions">
+            <a class="btn btn-outline-secondary" asp-action="Index" asp-route-cursoId="@Model.CursoSeleccionadoId">Volver al panel</a>
+            <form asp-action="Logout" method="post">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-outline-secondary">Cerrar sesion</button>
+            </form>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+    {
+        <div class="alert alert-danger">@Model.MensajeError</div>
+    }
+
+    <section class="admin-card">
+        <form asp-action="ReporteInscritos" method="get" class="admin-form-stack">
+            <div>
+                <label for="cursoId" class="form-label">Curso</label>
+                <select id="cursoId" name="cursoId" class="form-select" onchange="this.form.submit()">
+                    @foreach (var curso in Model.Cursos)
+                    {
+                        if (curso.IdActividad == Model.CursoSeleccionadoId)
+                        {
+                            <option value="@curso.IdActividad" selected>@curso.NombreActividad</option>
+                        }
+                        else
+                        {
+                            <option value="@curso.IdActividad">@curso.NombreActividad</option>
+                        }
+                    }
+                </select>
+            </div>
+        </form>
+
+        @if (Model.Detalle is not null)
+        {
+            <div class="report-export-actions">
+                <a class="btn btn-success" asp-action="DescargarReporteInscritosExcel" asp-route-cursoId="@Model.CursoSeleccionadoId">Descargar Excel</a>
+                <a class="btn btn-primary" asp-action="DescargarReporteInscritosWord" asp-route-cursoId="@Model.CursoSeleccionadoId">Descargar Word</a>
+                <a class="btn btn-outline-dark" asp-action="ReporteInscritosPdf" asp-route-cursoId="@Model.CursoSeleccionadoId" target="_blank" rel="noopener">PDF / imprimir</a>
+                <a class="btn btn-outline-success" asp-action="DescargarReporteInscritosGeneralExcel" asp-route-cursoId="@Model.CursoSeleccionadoId">Lista general Excel</a>
+            </div>
+        }
+    </section>
+
+    @if (Model.Detalle is not null)
+    {
+        var resumen = Model.Detalle.Resumen;
+        var mostrarSinCobro = resumen.SinCobro > 0;
+        var tablas = new[]
+        {
+            new { Titulo = "Inscritos por pais", Items = Model.Detalle.PorPais },
+            new { Titulo = "Inscritos por region", Items = Model.Detalle.PorRegion },
+            new { Titulo = "Inscritos por institucion de procedencia", Items = Model.Detalle.PorInstitucion },
+            new { Titulo = "Internos vs externos", Items = Model.Detalle.PorTipoParticipante }
+        };
+
+        <section class="admin-card">
+            <div class="admin-section-header">
+                <div>
+                    <h2>@(string.IsNullOrWhiteSpace(resumen.NombreCurso) ? "Curso seleccionado" : resumen.NombreCurso)</h2>
+                    <p class="admin-section-copy">Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente.</p>
+                </div>
+            </div>
+
+            <div class="report-metric-grid">
+                <div class="report-metric-card">
+                    <span>Total registros</span>
+                    <strong>@resumen.TotalInscritos</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Inscritos</span>
+                    <strong>@(resumen.Pagados + resumen.PagadosParciales)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pre-inscritos</span>
+                    <strong>@resumen.Pendientes</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Internos INSNSB</span>
+                    <strong>@resumen.Internos</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Externos</span>
+                    <strong>@resumen.Externos</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pagado</span>
+                    <strong>@resumen.Pagados</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pagado parcial</span>
+                    <strong>@resumen.PagadosParciales</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pendiente</span>
+                    <strong>@resumen.Pendientes</strong>
+                </div>
+                @if (mostrarSinCobro)
+                {
+                    <div class="report-metric-card">
+                        <span>Sin cobro</span>
+                        <strong>@resumen.SinCobro</strong>
+                    </div>
+                }
+                <div class="report-metric-card">
+                    <span>Monto pagado</span>
+                    <strong>@Money(resumen.MontoPagado)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Deuda pendiente</span>
+                    <strong>@Money(resumen.MontoDeuda)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Total pagado + deuda</span>
+                    <strong>@Money(resumen.MontoTotal)</strong>
+                </div>
+            </div>
+        </section>
+
+        @foreach (var tabla in tablas)
+        {
+            <section class="admin-card">
+                <h2>@tabla.Titulo</h2>
+
+                @if (tabla.Items.Count == 0)
+                {
+                    <p class="text-muted mb-0">No hay datos para mostrar.</p>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle report-table report-table-resizable js-resizable-table">
+                            <thead>
+                                <tr>
+                                    <th>Categoria</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Inscritos</th>
+                                    <th class="text-end">Pre-inscritos</th>
+                                    <th class="text-end">Internos</th>
+                                    <th class="text-end">Externos</th>
+                                    <th class="text-end">Pagado</th>
+                                    <th class="text-end">Pagado parcial</th>
+                                    <th class="text-end">Pendiente</th>
+                                    @if (mostrarSinCobro)
+                                    {
+                                        <th class="text-end">Sin cobro</th>
+                                    }
+                                    <th class="text-end">Monto pagado</th>
+                                    <th class="text-end">Deuda</th>
+                                    <th class="text-end">Total S/</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in tabla.Items)
+                                {
+                                    <tr>
+                                        <td class="table-primary-text">@item.Categoria</td>
+                                        <td class="text-end">@item.TotalInscritos</td>
+                                        <td class="text-end">@(item.Pagados + item.PagadosParciales)</td>
+                                        <td class="text-end">@item.Pendientes</td>
+                                        <td class="text-end">@item.Internos</td>
+                                        <td class="text-end">@item.Externos</td>
+                                        <td class="text-end">@item.Pagados</td>
+                                        <td class="text-end">@item.PagadosParciales</td>
+                                        <td class="text-end">@item.Pendientes</td>
+                                        @if (mostrarSinCobro)
+                                        {
+                                            <td class="text-end">@item.SinCobro</td>
+                                        }
+                                        <td class="text-end">@Money(item.MontoPagado)</td>
+                                        <td class="text-end">@Money(item.MontoDeuda)</td>
+                                        <td class="text-end">@Money(item.MontoTotal)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+    }
+</div>
+
+<script>
+    document.querySelectorAll('.js-resizable-table th').forEach((th) => {
+        const grip = document.createElement('span');
+        grip.className = 'report-column-resizer';
+        th.appendChild(grip);
+
+        grip.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            const startX = event.pageX;
+            const startWidth = th.offsetWidth;
+
+            const onMove = (moveEvent) => {
+                th.style.width = `${Math.max(70, startWidth + moveEvent.pageX - startX)}px`;
+            };
+
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    });
+</script>

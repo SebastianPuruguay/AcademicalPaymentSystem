@@ -1,0 +1,136 @@
+@model CURSO_INTERCULTURALIDAD.Models.PagoDemoViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pago Demo | INSNSB</title>
+    <link rel="icon" type="image/png" href="~/favicon.png">
+    <link rel="stylesheet" href="~/css/index.css" asp-append-version="true">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <div class="selection-container">
+            <div class="description-topbar">
+                <a class="back-link" href="@Model.VolverUrl">Volver al dashboard</a>
+                <a class="back-link" asp-action="Index">Regresar</a>
+            </div>
+
+            <span class="section-tag">Pago Demo</span>
+            <h1>Simulador de Pasarela</h1>
+
+            @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+            {
+                <div class="status-box status-error">@Model.MensajeError</div>
+            }
+            else
+            {
+                @if (Model.PagoConfirmado)
+                {
+                    <div class="status-box status-success">
+                        El pago de la cuota @Model.NumeroCuota fue registrado correctamente en la demo.
+                    </div>
+                }
+                else if (!string.IsNullOrWhiteSpace(Model.BloqueoPagoMensaje))
+                {
+                    <div class="status-box status-error">
+                        @Model.BloqueoPagoMensaje
+                    </div>
+                }
+
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <span>Curso</span>
+                        <strong>@Model.NombreCurso</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Alumno</span>
+                        <strong>@Model.NombreAlumno</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Cuota</span>
+                        <strong>@Model.NumeroCuota</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Monto</span>
+                        <strong>@($"S/ {Model.Monto:N2}")</strong>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Detalle de la cuota</h3>
+                    <div class="detail-grid">
+                        <div>
+                            <span>Documento</span>
+                            <strong>@Model.NumeroDocumento</strong>
+                        </div>
+                        <div>
+                            <span>Fecha límite</span>
+                            <strong>@Model.FechaVencimiento.ToString("dd/MM/yyyy")</strong>
+                        </div>
+                        <div>
+                            <span>Estado</span>
+                            <strong>@Model.Estado</strong>
+                            @if (!string.IsNullOrWhiteSpace(Model.EstadoIzipay))
+                            {
+                                <div class="helper-text">Estado IziPay: @Model.EstadoIzipay</div>
+                            }
+                        </div>
+                        <div>
+                            <span>Fecha de pago</span>
+                            <strong>@(Model.FechaPagoReal.HasValue ? Model.FechaPagoReal.Value.ToString("dd/MM/yyyy HH:mm") : "Pendiente")</strong>
+                        </div>
+                    </div>
+                </div>
+
+                @if (string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="info-section">
+                        <h3>Comprobante</h3>
+                        <div class="status-box status-success">
+                            El comprobante de esta cuota se enviara automaticamente al correo registrado.
+                        </div>
+                        <div class="action-stack">
+                            @if (!string.IsNullOrWhiteSpace(Model.NumeroComprobanteIzipay))
+                            {
+                                <div class="helper-text">Comprobante: @Model.NumeroComprobanteIzipay</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Model.CodigoAutorizacionIzipay))
+                            {
+                                <div class="helper-text">Codigo de autorizacion: @Model.CodigoAutorizacionIzipay</div>
+                            }
+                            @if (string.IsNullOrWhiteSpace(Model.NumeroComprobanteIzipay) && string.IsNullOrWhiteSpace(Model.CodigoAutorizacionIzipay))
+                            {
+                                <div class="helper-text">Si IziPay aun no termina el proceso, el comprobante llegara al correo en cuanto quede disponible.</div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase) && Model.PuedePagarAhora)
+                {
+                    <form method="post" asp-action="ConfirmarPagoDemo" class="selection-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="token" value="@Model.Token">
+                        <div class="plan-actions">
+                            <button type="submit">Confirmar pago demo</button>
+                        </div>
+                    </form>
+                }
+                else if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="plan-actions">
+                        <button type="button" class="secondary-button" disabled>Pago bloqueado</button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</body>
+</html>

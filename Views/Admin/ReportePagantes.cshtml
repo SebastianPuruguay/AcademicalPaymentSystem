@@ -1,0 +1,226 @@
+@model CURSO_INTERCULTURALIDAD.Models.ReportePagantesViewModel
+@{
+    ViewData["Title"] = "Reporte de estado de pagos";
+
+    static string Money(decimal value)
+    {
+        return value == 0m ? "--" : $"S/ {value:N2}";
+    }
+
+    static string Selected(string current, string expected)
+    {
+        return string.Equals(current, expected, StringComparison.OrdinalIgnoreCase) ? "selected" : string.Empty;
+    }
+
+    var mostrarSinCobro = Model.Detalle?.SinCobro > 0;
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+}
+
+<div class="admin-shell">
+    <div class="admin-toolbar">
+        <div>
+            <span class="admin-eyebrow">INSNSB - Reportes</span>
+            <h1>Reporte de estado de pagos</h1>
+            <p>Informe por curso con alumnos pagados, pagados parcialmente y pendientes para coordinacion o jefatura.</p>
+        </div>
+
+        <div class="admin-toolbar-actions">
+            <a class="btn btn-outline-secondary" asp-action="Index" asp-route-cursoId="@Model.CursoSeleccionadoId">Volver al panel</a>
+            <form asp-action="Logout" method="post">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-outline-secondary">Cerrar sesion</button>
+            </form>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+    {
+        <div class="alert alert-danger">@Model.MensajeError</div>
+    }
+
+    <section class="admin-card">
+        <form asp-action="ReportePagantes" method="get" class="admin-form-stack report-filter-grid">
+            <div>
+                <label for="cursoId" class="form-label">Curso</label>
+                <select id="cursoId" name="cursoId" class="form-select">
+                    @foreach (var curso in Model.Cursos)
+                    {
+                        if (curso.IdActividad == Model.CursoSeleccionadoId)
+                        {
+                            <option value="@curso.IdActividad" selected>@curso.NombreActividad</option>
+                        }
+                        else
+                        {
+                            <option value="@curso.IdActividad">@curso.NombreActividad</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="estadoPago" class="form-label">Estado de pago</label>
+                <select id="estadoPago" name="estadoPago" class="form-select">
+                    <!option value="todos" @Selected(Model.FiltroEstadoPago, "todos")>Todos</!option>
+                    <!option value="pagado" @Selected(Model.FiltroEstadoPago, "pagado")>Pagado</!option>
+                    <!option value="parcial" @Selected(Model.FiltroEstadoPago, "parcial")>Pagado parcial</!option>
+                    <!option value="pendiente" @Selected(Model.FiltroEstadoPago, "pendiente")>Pendiente</!option>
+                    @if (mostrarSinCobro || Selected(Model.FiltroEstadoPago, "sin_cobro") == "selected")
+                    {
+                        <!option value="sin_cobro" @Selected(Model.FiltroEstadoPago, "sin_cobro")>Sin cobro</!option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label for="busqueda" class="form-label">Buscar alumno</label>
+                <input id="busqueda" name="busqueda" class="form-control" value="@Model.Busqueda" placeholder="DNI, nombre, correo, celular o institucion" />
+            </div>
+            <div class="report-filter-actions">
+                <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+                <a class="btn btn-outline-secondary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Limpiar</a>
+            </div>
+        </form>
+
+        @if (Model.Detalle is not null)
+        {
+            <div class="report-export-actions">
+                <a class="btn btn-success" asp-action="DescargarReportePagantesExcel" asp-route-cursoId="@Model.CursoSeleccionadoId" asp-route-estadoPago="@Model.FiltroEstadoPago" asp-route-busqueda="@Model.Busqueda">Descargar Excel</a>
+                <a class="btn btn-primary" asp-action="DescargarReportePagantesWord" asp-route-cursoId="@Model.CursoSeleccionadoId" asp-route-estadoPago="@Model.FiltroEstadoPago" asp-route-busqueda="@Model.Busqueda">Descargar Word</a>
+                <a class="btn btn-outline-dark" asp-action="ReportePagantesPdf" asp-route-cursoId="@Model.CursoSeleccionadoId" asp-route-estadoPago="@Model.FiltroEstadoPago" asp-route-busqueda="@Model.Busqueda" target="_blank" rel="noopener">PDF / imprimir</a>
+            </div>
+        }
+    </section>
+
+    @if (Model.Detalle is not null)
+    {
+        <section class="admin-card">
+            <div class="admin-section-header">
+                <div>
+                    <h2>@(string.IsNullOrWhiteSpace(Model.Detalle.NombreCurso) ? "Curso seleccionado" : Model.Detalle.NombreCurso)</h2>
+                    <p class="admin-section-copy">Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente.</p>
+                </div>
+            </div>
+
+            <div class="report-metric-grid">
+                <div class="report-metric-card">
+                    <span>Total registros</span>
+                    <strong>@Model.Detalle.TotalInscritos</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Inscritos</span>
+                    <strong>@(Model.Detalle.Pagados + Model.Detalle.PagadosParciales)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pre-inscritos</span>
+                    <strong>@Model.Detalle.Pendientes</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pagado</span>
+                    <strong>@Model.Detalle.Pagados</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pagado parcial</span>
+                    <strong>@Model.Detalle.PagadosParciales</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pendiente</span>
+                    <strong>@Model.Detalle.Pendientes</strong>
+                </div>
+                @if (mostrarSinCobro)
+                {
+                    <div class="report-metric-card">
+                        <span>Sin cobro</span>
+                        <strong>@Model.Detalle.SinCobro</strong>
+                    </div>
+                }
+                <div class="report-metric-card">
+                    <span>Pagado filtrado</span>
+                    <strong>@Money(Model.Detalle.MontoPagadoTotal)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Pendiente filtrado</span>
+                    <strong>@Money(Model.Detalle.MontoPendienteTotal)</strong>
+                </div>
+                <div class="report-metric-card">
+                    <span>Comprometido filtrado</span>
+                    <strong>@Money(Model.Detalle.MontoComprometidoTotal)</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-card">
+            <h2>Detalle de inscritos segun estado de pago</h2>
+
+            @if (Model.Detalle.Items.Count == 0)
+            {
+                <p class="text-muted mb-0">No hay inscritos que coincidan con el filtro seleccionado.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle report-table report-table-resizable js-resizable-table">
+                        <thead>
+                            <tr>
+                                <th>Alumno</th>
+                                <th>DNI / Documento</th>
+                                <th>Celular</th>
+                                <th>Correo</th>
+                                <th>Institucion de procedencia</th>
+                                <th>Registro</th>
+                                <th>Ultimo pago</th>
+                                <th>Estado reporte</th>
+                                <th class="text-end">Monto pagado</th>
+                                <th class="text-end">Monto pendiente</th>
+                                <th class="text-end">Cuotas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Detalle.Items)
+                            {
+                                <tr>
+                                    <td class="table-primary-text">@item.Nombres @item.Apellidos</td>
+                                    <td>@item.NumeroDocumento</td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)</td>
+                                    <td>@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
+                                    <td><span class="report-status-pill report-status-@item.EstadoReportePago.ToLowerInvariant()">@item.EstadoReportePagoEtiqueta</span></td>
+                                    <td class="text-end">@Money(item.MontoPagado)</td>
+                                    <td class="text-end">@Money(item.MontoPendiente)</td>
+                                    <td class="text-end">@item.CuotasPagadas/@item.NumeroCuotas</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+<script>
+    document.querySelectorAll('.js-resizable-table th').forEach((th) => {
+        const grip = document.createElement('span');
+        grip.className = 'report-column-resizer';
+        th.appendChild(grip);
+
+        grip.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            const startX = event.pageX;
+            const startWidth = th.offsetWidth;
+
+            const onMove = (moveEvent) => {
+                th.style.width = `${Math.max(70, startWidth + moveEvent.pageX - startX)}px`;
+            };
+
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    });
+</script>

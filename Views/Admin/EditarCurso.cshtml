@@ -1,0 +1,353 @@
+@model CURSO_INTERCULTURALIDAD.Models.AdminCursoConfiguracionViewModel
+@{
+    ViewData["Title"] = "Editar curso";
+    var curso = Model.CursoSeleccionado;
+    var modalidades = new[] { "Presencial", "Virtual", "Semipresencial", "Hibrido", "Por confirmar" };
+    var modalidadActual = Model.ConfiguracionCurso.Modalidad?.Trim();
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
+}
+
+<div class="admin-shell">
+    <div class="admin-toolbar">
+        <div>
+            <span class="admin-eyebrow">INSNSB - Configuracion</span>
+            <h1>Editar ficha publica del curso</h1>
+            <p>Corrige lo que ve el alumno en el formulario de inscripcion con campos guiados y una vista previa antes de guardar.</p>
+        </div>
+        <div class="admin-toolbar-actions">
+            @if (curso is not null)
+            {
+                <a class="btn btn-outline-primary" asp-action="Index" asp-route-cursoId="@curso.IdActividad">Volver al panel</a>
+            }
+            else
+            {
+                <a class="btn btn-outline-primary" asp-action="Index">Volver al panel</a>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeExito))
+    {
+        <div class="alert alert-success">@Model.MensajeExito</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+    {
+        <div class="alert alert-danger">@Model.MensajeError</div>
+    }
+
+    @if (curso is null)
+    {
+        <section class="admin-card">
+            <p class="mb-0 text-muted">No se encontro el curso solicitado para editar.</p>
+        </section>
+    }
+    else
+    {
+        <section class="admin-card">
+            <div class="admin-section-header">
+                <div>
+                    <h2>@curso.NombreActividad</h2>
+                    <p class="admin-section-copy">Usa la vista previa para revisar banner, textos, montos, cuotas y visibilidad antes de guardar.</p>
+                </div>
+                <div class="stats-pills mt-0">
+                    <span>Visible: <strong>@curso.VisibleEnFormulario</strong></span>
+                    <span>Historico: <strong>@curso.FuePagadoHistorico</strong></span>
+                    <span>CPMS: <strong>@(string.IsNullOrWhiteSpace(curso.CodigoCentroCosto) ? "Pendiente" : curso.CodigoCentroCosto)</strong></span>
+                </div>
+            </div>
+
+            <form method="post" class="admin-config-layout" id="courseConfigForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="ConfiguracionCurso.CursoId" value="@curso.IdActividad" />
+
+                <div class="admin-card admin-config-panel">
+                    <div class="admin-form-stack">
+                        <div>
+                            <label asp-for="ConfiguracionCurso.NombreActividad" class="form-label">Nombre del curso</label>
+                            <input asp-for="ConfiguracionCurso.NombreActividad" class="form-control" maxlength="300" autocomplete="off" />
+                            <small class="admin-field-help">Es el titulo que vera el alumno en la cabecera del formulario.</small>
+                            <span asp-validation-for="ConfiguracionCurso.NombreActividad" class="text-danger"></span>
+                        </div>
+
+                        <div>
+                            <label asp-for="ConfiguracionCurso.TextoDirigidoA" class="form-label">Texto introductorio</label>
+                            <textarea asp-for="ConfiguracionCurso.TextoDirigidoA" class="form-control" rows="4" maxlength="2000" placeholder="Mensaje visible antes del formulario"></textarea>
+                            <small class="admin-field-help">Usa un texto corto para explicar a quien va dirigido y alguna indicacion importante.</small>
+                            <span asp-validation-for="ConfiguracionCurso.TextoDirigidoA" class="text-danger"></span>
+                        </div>
+
+                        <div class="admin-config-grid">
+                            <div>
+                                <label asp-for="ConfiguracionCurso.Modalidad" class="form-label">Modalidad</label>
+                                <select asp-for="ConfiguracionCurso.Modalidad" class="form-select">
+                                    @if (!string.IsNullOrWhiteSpace(modalidadActual) && !modalidades.Contains(modalidadActual, StringComparer.OrdinalIgnoreCase))
+                                    {
+                                        <option value="@modalidadActual">@modalidadActual</option>
+                                    }
+                                    @foreach (var modalidad in modalidades)
+                                    {
+                                        <option value="@modalidad">@modalidad</option>
+                                    }
+                                </select>
+                                <small class="admin-field-help">Selecciona una opcion cerrada para evitar variaciones en reportes.</small>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.TextoFechasDuracion" class="form-label">Fechas / duracion</label>
+                                <input asp-for="ConfiguracionCurso.TextoFechasDuracion" class="form-control" maxlength="250" placeholder="Ej. Del 10/05/2026 al 20/08/2026" />
+                                <small class="admin-field-help">Texto visible para el alumno; las fechas de cuotas se configuran mas abajo.</small>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.HorarioTexto" class="form-label">Horario</label>
+                                <input asp-for="ConfiguracionCurso.HorarioTexto" class="form-control" maxlength="250" placeholder="Ej. Sabados de 08:00 a 13:00" />
+                                <small class="admin-field-help">Indica dias y horas en una sola linea clara.</small>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.LugarActividad" class="form-label">Lugar</label>
+                                <input asp-for="ConfiguracionCurso.LugarActividad" class="form-control" maxlength="250" placeholder="Ej. Auditorio INSNSB o Plataforma virtual" />
+                                <small class="admin-field-help">Se mostrara como ubicacion o plataforma del curso.</small>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.CostoBase" class="form-label">Tarifa general</label>
+                                <input asp-for="ConfiguracionCurso.CostoBase" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
+                                <small class="admin-field-help">Monto para participantes externos. Usa 0 si no corresponde cobrar.</small>
+                                <span asp-validation-for="ConfiguracionCurso.CostoBase" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.CostoPersonalInsnsb" class="form-label">Costo INSNSB para la logica interna</label>
+                                <input asp-for="ConfiguracionCurso.CostoPersonalInsnsb" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
+                                <small class="admin-field-help">Monto usado cuando el alumno valida codigo INSNSB. Puede ser 0.</small>
+                                <span asp-validation-for="ConfiguracionCurso.CostoPersonalInsnsb" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.CelularContactoActividad" class="form-label">Celular de contacto</label>
+                                <input asp-for="ConfiguracionCurso.CelularContactoActividad" class="form-control" type="tel" maxlength="30" inputmode="tel" placeholder="+51 913 452 763" />
+                                <small class="admin-field-help">Numero mostrado en la tarifa INSNSB. Incluye codigo de pais si aplica.</small>
+                                <span asp-validation-for="ConfiguracionCurso.CelularContactoActividad" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.CodigoCentroCosto" class="form-label">Codigo CPMS</label>
+                                <input asp-for="ConfiguracionCurso.CodigoCentroCosto" class="form-control" maxlength="50" pattern="[A-Za-z0-9._-]{1,50}" placeholder="Ej. PE127" />
+                                <small class="admin-field-help">Se envia a IziPay como CodigoCPMS. Usa letras, numeros, punto o guion.</small>
+                                <span asp-validation-for="ConfiguracionCurso.CodigoCentroCosto" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.MaxCuotas" class="form-label">Maximo de cuotas</label>
+                                <input asp-for="ConfiguracionCurso.MaxCuotas" class="form-control" type="number" min="0" max="24" inputmode="numeric" />
+                                <small class="admin-field-help">Debe coincidir con la opcion de cuota mas alta permitida.</small>
+                                <span asp-validation-for="ConfiguracionCurso.MaxCuotas" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.MaxInscritos" class="form-label">Cupo referencial</label>
+                                <input asp-for="ConfiguracionCurso.MaxInscritos" class="form-control" type="number" min="0" inputmode="numeric" />
+                                <small class="admin-field-help">Dato informativo para control interno; no bloquea inscripciones automaticamente.</small>
+                                <span asp-validation-for="ConfiguracionCurso.MaxInscritos" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="admin-config-grid">
+                            <div>
+                                <label asp-for="ConfiguracionCurso.OpcionesCuotas" class="form-label">Opciones de cuotas</label>
+                                <input asp-for="ConfiguracionCurso.OpcionesCuotas" type="hidden" id="opcionesCuotasInput" />
+                                <div class="admin-option-grid" data-cuotas-options>
+                                    @for (var cuota = 1; cuota <= 6; cuota++)
+                                    {
+                                        <label class="admin-check-option">
+                                            <input type="checkbox" value="@cuota" class="js-cuota-option" />
+                                            <span>@cuota cuota@(cuota == 1 ? "" : "s")</span>
+                                        </label>
+                                    }
+                                </div>
+                                <small class="admin-field-help">Marca solo las alternativas que podra elegir el alumno. Ejemplo: 1 y 3 cuotas.</small>
+                                <span asp-validation-for="ConfiguracionCurso.OpcionesCuotas" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.FechasPagoCuotas" class="form-label">Fechas de pago por cuota</label>
+                                <input asp-for="ConfiguracionCurso.FechasPagoCuotas" type="hidden" id="fechasPagoCuotasInput" />
+                                <div id="paymentDatesEditor" class="admin-date-list"></div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addPaymentDateButton">Agregar fecha</button>
+                                <small class="admin-field-help">Cada fecha sera una fecha limite de pago. El sistema usa las primeras fechas segun el numero de cuotas elegido.</small>
+                                <span asp-validation-for="ConfiguracionCurso.FechasPagoCuotas" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="admin-config-grid">
+                            <div>
+                                <label asp-for="ConfiguracionCurso.UrlProgramaWeb" class="form-label">URL del programa</label>
+                                <input asp-for="ConfiguracionCurso.UrlProgramaWeb" class="form-control" type="url" maxlength="1000" placeholder="https://..." />
+                                <small class="admin-field-help">Si se completa, el alumno vera el boton Ver el programa.</small>
+                                <span asp-validation-for="ConfiguracionCurso.UrlProgramaWeb" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.UrlBannerWeb" class="form-label">URL del banner</label>
+                                <input asp-for="ConfiguracionCurso.UrlBannerWeb" class="form-control" type="url" maxlength="1000" placeholder="https://..." />
+                                <small class="admin-field-help">Imagen superior del curso. Recomendado: banner horizontal.</small>
+                                <span asp-validation-for="ConfiguracionCurso.UrlBannerWeb" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="admin-config-grid">
+                            <div>
+                                <label asp-for="ConfiguracionCurso.VisibleEnFormulario" class="form-label">Visible en formulario publico</label>
+                                <select asp-for="ConfiguracionCurso.VisibleEnFormulario" class="form-select">
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                                <small class="admin-field-help">Si eliges No, el curso se oculta al alumno pero se mantiene en admin.</small>
+                                <span asp-validation-for="ConfiguracionCurso.VisibleEnFormulario" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.RestriccionInscripcionUnica" class="form-label">Inscripcion unica por documento/correo</label>
+                                <select asp-for="ConfiguracionCurso.RestriccionInscripcionUnica" class="form-select">
+                                    <option value="Si">Si</option>
+                                    <option value="No">No</option>
+                                </select>
+                                <small class="admin-field-help">Recomendado: Si, para evitar registros duplicados del mismo alumno.</small>
+                                <span asp-validation-for="ConfiguracionCurso.RestriccionInscripcionUnica" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="admin-form-actions">
+                            <button type="submit" class="btn btn-outline-primary" asp-action="VistaPreviaCurso">Vista previa</button>
+                            <button type="submit" class="btn btn-brand" asp-action="GuardarConfiguracionCurso">Guardar cambios</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card admin-config-panel">
+                    <div class="admin-preview-head">
+                        <div>
+                            <h3 class="mb-1">Vista previa para el alumno</h3>
+                            <p class="text-muted mb-0">Asi se vera el encabezado del curso dentro del formulario publico.</p>
+                        </div>
+                        <div class="stats-pills mt-0">
+                            <span>Visible: <strong>@Model.ConfiguracionCurso.VisibleEnFormulario</strong></span>
+                            <span>Banner: <strong>@(string.IsNullOrWhiteSpace(Model.ConfiguracionCurso.UrlBannerWeb) ? "Pendiente" : "Configurado")</strong></span>
+                        </div>
+                    </div>
+
+                    @if (Model.VistaPreviaCurso is null)
+                    {
+                        <p class="text-muted mb-0">La vista previa aparecera aqui cuando el curso tenga informacion para mostrar.</p>
+                    }
+                    else
+                    {
+                        <partial name="_CursoPublicoPreview" model="Model.VistaPreviaCurso" />
+                    }
+                </div>
+            </form>
+        </section>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var form = document.getElementById('courseConfigForm');
+            var cuotasInput = document.getElementById('opcionesCuotasInput');
+            var fechasInput = document.getElementById('fechasPagoCuotasInput');
+            var fechasEditor = document.getElementById('paymentDatesEditor');
+            var addDateButton = document.getElementById('addPaymentDateButton');
+            var cuotaCheckboxes = Array.from(document.querySelectorAll('.js-cuota-option'));
+
+            if (!form || !cuotasInput || !fechasInput || !fechasEditor || !addDateButton) {
+                return;
+            }
+
+            function parseList(rawValue) {
+                var value = (rawValue || '').trim();
+                if (!value) {
+                    return [];
+                }
+
+                try {
+                    var parsed = JSON.parse(value);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (error) {
+                    return value
+                        .replace('[', '')
+                        .replace(']', '')
+                        .replace(/"/g, '')
+                        .split(/[,;|\n\r]+/)
+                        .map(function (item) { return item.trim(); })
+                        .filter(Boolean);
+                }
+            }
+
+            function normalizeCuotas() {
+                var values = cuotaCheckboxes
+                    .filter(function (checkbox) { return checkbox.checked; })
+                    .map(function (checkbox) { return Number(checkbox.value); })
+                    .filter(function (value, index, array) { return value > 0 && array.indexOf(value) === index; })
+                    .sort(function (left, right) { return left - right; });
+
+                cuotasInput.value = values.length ? JSON.stringify(values) : '';
+            }
+
+            function normalizeFechas() {
+                var values = Array.from(fechasEditor.querySelectorAll('input[type="date"]'))
+                    .map(function (input) { return input.value; })
+                    .filter(Boolean);
+
+                fechasInput.value = values.length ? JSON.stringify(values) : '';
+            }
+
+            function addDateRow(value) {
+                var row = document.createElement('div');
+                row.className = 'admin-date-row';
+
+                var input = document.createElement('input');
+                input.type = 'date';
+                input.className = 'form-control';
+                input.value = value || '';
+                input.addEventListener('change', normalizeFechas);
+
+                var removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'btn btn-sm btn-outline-danger';
+                removeButton.textContent = 'Quitar';
+                removeButton.addEventListener('click', function () {
+                    row.remove();
+                    normalizeFechas();
+                });
+
+                row.appendChild(input);
+                row.appendChild(removeButton);
+                fechasEditor.appendChild(row);
+                normalizeFechas();
+            }
+
+            parseList(cuotasInput.value)
+                .map(function (value) { return Number(value); })
+                .forEach(function (value) {
+                    var checkbox = cuotaCheckboxes.find(function (item) { return Number(item.value) === value; });
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+
+            cuotaCheckboxes.forEach(function (checkbox) {
+                checkbox.addEventListener('change', normalizeCuotas);
+            });
+
+            var fechasIniciales = parseList(fechasInput.value);
+            if (fechasIniciales.length) {
+                fechasIniciales.forEach(addDateRow);
+            } else {
+                addDateRow('');
+            }
+
+            addDateButton.addEventListener('click', function () {
+                addDateRow('');
+            });
+
+            form.addEventListener('submit', function () {
+                normalizeCuotas();
+                normalizeFechas();
+            });
+        });
+    </script>
+}

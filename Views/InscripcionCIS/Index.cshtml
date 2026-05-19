@@ -1,0 +1,410 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@model CURSO_INTERCULTURALIDAD.Models.PaginaInscripcionCursosViewModel
+@{
+    Layout = null;
+    var jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+    var curso = Model.CursoSeleccionado;
+    var bannerUrl = curso?.UrlBannerWeb ?? Model.BannerPredeterminadoUrl;
+    var tituloPagina = curso is null ? "Seleccion de curso pagado | INSNSB" : $"{curso.NombreActividad} | INSNSB";
+    var telefonoContactoCurso = string.IsNullOrWhiteSpace(curso?.CelularContactoActividad)
+        ? "+51 913 452 763"
+        : curso.CelularContactoActividad;
+    static string FormatearCosto(decimal? monto, string fallback)
+    {
+        if (!monto.HasValue)
+        {
+            return fallback;
+        }
+
+        return monto.Value == 0m ? "--" : $"S/ {monto.Value:N2}";
+    }
+
+    static string FormatearOpcionesCuotas(CURSO_INTERCULTURALIDAD.Models.CursoPagadoResumen curso)
+    {
+        var opciones = (curso.OpcionesCuotas ?? [])
+            .Where(opcion => opcion > 0)
+            .Distinct()
+            .OrderBy(opcion => opcion)
+            .ToList();
+
+        if (opciones.Count > 0)
+        {
+            return $"{string.Join(" o ", opciones)} cuota(s)";
+        }
+
+        return curso.MaxCuotas.GetValueOrDefault() > 0
+            ? $"1 a {curso.MaxCuotas} cuota(s)"
+            : "Sin cuotas";
+    }
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@tituloPagina</title>
+    <link rel="icon" type="image/png" href="~/favicon.png">
+    <link rel="stylesheet" href="~/css/index.css" asp-append-version="true">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <div class="banner-container">
+            <img src="@bannerUrl" alt="Banner del curso" loading="eager">
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+        {
+            <div class="status-box status-error">@Model.MensajeError</div>
+        }
+
+        @if (curso is null)
+        {
+            <div class="selection-container">
+                <div class="selection-header">
+                    <span class="section-tag">INSNSB - Docencia</span>
+                    <h1>Inscripción de cursos y diplomados</h1>
+                    <p>
+                        Primero selecciona la actividad académica a la que deseas inscribirte.
+                        Al continuar, se abrirá el formulario de registro.
+                    </p>
+                </div>
+
+                <form method="get" asp-action="Index" class="selection-form">
+                    <div class="form-group">
+                        <label for="cursoId" class="required-label">Seleccione el curso o diplomado</label>
+                        <select id="cursoId" name="cursoId" required>
+                            <option value="">Seleccione un curso...</option>
+                            @foreach (var item in Model.Cursos)
+                            {
+                                
+                                <option value="@item.IdActividad">@item.NombreActividad</option>
+                            }
+                        </select>
+                        @* <small class="helper-text">Tambien puedes compartir por internet un enlace directo usando `?cursoId=` en la URL.</small> *@
+                    </div>
+
+                    <div class="selection-actions">
+                        <button type="submit" @(Model.Cursos.Count == 0 ? "disabled" : null)>Continuar con la inscripcion</button>
+                        <a class="back-link" asp-action="Seguimiento">Consulta tus inscripciones</a>
+                    </div>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div class="description-container">
+                <div class="description-topbar">
+                    <a class="back-link" asp-action="Index">Cambiar curso</a>
+                </div>
+
+                <span class="section-tag">Información del curso</span>
+                <h1>@curso.NombreActividad</h1>
+                <p>
+                    @(string.IsNullOrWhiteSpace(curso.TextoDirigidoA)
+                        ? "Completa el formulario con los datos del participante. Este flujo esta pensado para inscripciones por internet y acceso directo por enlace."
+                        : curso.TextoDirigidoA)
+                </p>
+
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <span>Tarifa general</span>
+                        <strong>@FormatearCosto(curso.CostoBase, "Por confirmar")</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Tarifa trabajador INSNSB</span>
+                        <strong id="courseInternalCost">
+                            Comunicarse al @telefonoContactoCurso
+                        </strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Opciones de cuotas</span>
+                        <strong>@FormatearOpcionesCuotas(curso)</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Modalidad</span>
+                        <strong>@(string.IsNullOrWhiteSpace(curso.Modalidad) ? "Por confirmar" : curso.Modalidad)</strong>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Detalle rápido</h3>
+                    <div class="detail-grid">
+                        <div>
+                            <span>Fechas</span>
+                            <strong>@(string.IsNullOrWhiteSpace(curso.TextoFechasDuracion) ? "Por confirmar" : curso.TextoFechasDuracion)</strong>
+                        </div>
+                        <div>
+                            <span>Horario</span>
+                            <strong>@(string.IsNullOrWhiteSpace(curso.HorarioTexto) ? "Por confirmar" : curso.HorarioTexto)</strong>
+                        </div>
+                        <div>
+                            <span>Lugar</span>
+                            <strong>@(string.IsNullOrWhiteSpace(curso.LugarActividad) ? "Por confirmar" : curso.LugarActividad)</strong>
+                        </div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(curso.UrlProgramaWeb))
+                {
+                    <div class="program-link-wrap">
+                        <a href="@curso.UrlProgramaWeb" target="_blank" rel="noopener noreferrer" class="program-link">
+                            VER EL PROGRAMA
+                        </a>
+                    </div>
+                }
+            </div>
+
+            <div class="form-container">
+                <form id="inscripcionForm" novalidate>
+                    <input type="hidden" id="cursoIdHidden" name="CursoId" value="@curso.IdActividad">
+
+                    <h2>Formulario de Inscripción</h2>
+                    <p class="form-intro">
+                        Si llegaste por un enlace compartido, estás registrándote en <strong>@curso.NombreActividad</strong>.
+                    </p>
+                    <p class="required-note">Los campos marcados con <span class="required-mark" aria-hidden="true">*</span> son obligatorios.</p>
+
+                    <div id="formFeedback" class="status-box" hidden></div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="tipoDocumento" class="required-label">Tipo de documento</label>
+                            <select id="tipoDocumento" name="TipoDocumento" required>
+                                <option value="DNI">DNI</option>
+                                <option value="CE">Carne de Extranjeria</option>
+                                <option value="Pasaporte">Pasaporte</option>
+                            </select>
+                        </div>
+                        <div class="form-group half-width">
+                            <label for="numeroDocumento" class="required-label">Número de documento</label>
+                            <input type="text" id="numeroDocumento" name="NumeroDocumento" maxlength="20" required>
+                            <small class="helper-text">Inscripción única por número de documento</small>
+                            <small id="dniLoader" class="loader-text" hidden>Consultando...</small>
+
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="nombres" class="required-label">Nombres</label>
+                            <input type="text" id="nombres" name="Nombres" readonly required>
+                        </div>
+                        <div class="form-group half-width">
+                            <label for="apellidos" class="required-label">Apellidos</label>
+                            <input type="text" id="apellidos" name="Apellidos" readonly required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="correo" class="required-label">Correo electrónico</label>
+                            <input type="email" id="correo" name="Correo" required>
+                        </div>
+                        <div class="form-group half-width">
+                            <label for="confirmacionCorreo" class="required-label">Confirmar correo electrónico</label>
+                            <input type="email" id="confirmacionCorreo" autocomplete="email" required>
+                            <small class="helper-text">Debe coincidir exactamente con el correo principal.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width phone-code-field">
+                            <label for="codigoPais" class="required-label">Código de país</label>
+                            <select id="codigoPais" name="CodigoPais" required></select>
+                            <small class="helper-text">Selecciona el prefijo internacional.</small>
+                        </div>
+                        <div class="form-group half-width">
+                            <label for="celular" class="required-label">Celular</label>
+                            <input type="tel" id="celular" name="Celular" inputmode="tel" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="pais" class="required-label">País</label>
+                            <select id="pais" name="Pais" required></select>
+                        </div>
+                        <div class="form-group half-width" id="regionPeruGroup">
+                            <label for="regionPeru" class="required-label">Departamento</label>
+                            <select id="regionPeru"></select>
+                        </div>
+                        <div class="form-group half-width hidden-field" id="regionExteriorGroup">
+                            <label for="regionExterior" class="required-label">Región o ciudad</label>
+                            <input type="text" id="regionExterior" placeholder="Ej. Quito o Santiago">
+                        </div>
+                        <input type="hidden" id="region" name="Region">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="profesion" class="required-label">Profesión</label>
+                            <select id="profesion" name="Profesion" required></select>
+                        </div>
+                        <div class="form-group half-width hidden-field" id="especialidadContainer">
+                            <label for="especialidad" class="required-label">Especialidad</label>
+                            <select id="especialidad" name="Especialidad"></select>
+                        </div>
+                    </div>
+
+                    @if (curso.IdActividad == 217)
+                    {
+                        <div class="status-box status-success course-restriction-note">
+                            Este diplomado está dirigido solo a profesionales de Medicina Humana con especialidad en Anestesiología.
+                        </div>
+                    }
+
+                    <div class="form-group">
+                        <label for="tipoInstitucion" class="required-label">Institución de procedencia</label>
+                        <select id="tipoInstitucion" name="TipoInstitucion" required>
+                            <option value="">Seleccione...</option>
+                            <option value="INSNSB">Trabajador INSNSB</option>
+                            <option value="IPRESS">IPRESS</option>
+                            <option value="UNIVERSIDAD">Universidad</option>
+                            <option value="OTRA">Otra organizacion</option>
+                        </select>
+                        <input type="hidden" id="nombreInstitucion" name="NombreInstitucion">
+                    </div>
+
+                    <div class="form-group hidden-field" id="ipressContainer">
+                        <label for="nombreIpress" class="required-label">Nombre de la IPRESS</label>
+                        <input type="text" id="nombreIpress" placeholder="Hospital, clinica o establecimiento">
+                    </div>
+
+                    <div class="form-group hidden-field" id="universidadContainer">
+                        <label for="listaUniversidades" class="required-label">Universidad</label>
+                        <select id="listaUniversidades"></select>
+                    </div>
+
+                    <div class="form-group hidden-field" id="otraInstitucionContainer">
+                        <label for="nombreOtraInstitucion" class="required-label">Nombre de la institución</label>
+                        <input type="text" id="nombreOtraInstitucion" placeholder="Empresa, colegio profesional u otra organizacion">
+                    </div>
+
+                    <div class="form-group hidden-field" id="insnsbConditionGroup">
+                        <label for="condicionLaboralInsnsb" class="required-label">Condición laboral en INSNSB</label>
+                        <select id="condicionLaboralInsnsb" name="CondicionLaboralInsnsb">
+                            <option value="">Seleccione...</option>
+                            <option value="LOCADOR">Locador</option>
+                            <option value="NOMBRADO">Nombrado</option>
+                            <option value="CAS">CAS</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group hidden-field" id="insnsbCodeGroup">
+                        <label for="codigoInsnsb" class="required-label">Código único INSNSB</label>
+                        <input type="text" id="codigoInsnsb" name="CodigoInsnsb" maxlength="50" placeholder="Ej. INS-0211-AB12CD34">
+                        <small class="helper-text">Este código es para trabajadores INSNSB, comunicarse al número @telefonoContactoCurso o acercarse a DOCENCIA.</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half-width">
+                            <label for="medioComunicacion" class="required-label">Cómo se enteró del curso</label>
+                            <select id="medioComunicacion" name="MedioComunicacion" required>
+                                <option value="">Seleccione...</option>
+                                <option value="WHATSAPP">WhatsApp</option>
+                                <option value="REDES SOCIALES">Redes sociales</option>
+                                <option value="CORREO INSTITUCIONAL">Correo institucional</option>
+                                <option value="PAGINA WEB INSTITUCIONAL">Página web institucional</option>
+                                <option value="REFERENCIA INTERNA">Referencia interna</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+                        </div>
+                        <div class="form-group half-width hidden-field" id="otherMediaGroup">
+                            <label for="otroMedioComunicacion" class="required-label">Otro medio</label>
+                            <input type="text" id="otroMedioComunicacion" name="OtroMedioComunicacion">
+                        </div>
+                    </div>
+
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="aceptaTratamientoDatos" name="AceptaTratamientoDatos" value="true" required>
+                        <label for="aceptaTratamientoDatos">
+                            <b>Declaro y acepto<span class="required-mark" aria-hidden="true">*</span>:</b> De conformidad con la Ley N.° 29733 y el Decreto Supremo N.° 003-2013-JUS, el usuario autoriza el uso de sus datos personales para fines académicos, para eventos que el INSN SB organice, auspicie o participe, los que podrán ser comunicados a través de envío de correos electrónicos, mensaje de texto o WhatsApp.
+                        </label>
+                    </div>
+
+                    <button type="submit" id="submitButton">Registrar inscripción</button>
+
+                    <div id="paymentPlanSection" class="info-section hidden-field">
+                        <h3>Selección de Plan de Pagos</h3>
+                        <p class="form-intro" id="paymentPlanIntro">
+                            Elige cuantas cuotas deseas programar. Te mostraremos las fechas límite de pago antes de confirmar.
+                        </p>
+
+                        <div class="summary-grid">
+                            <div class="summary-card">
+                                <span>Costo final</span>
+                                <strong id="paymentFinalCost">--</strong>
+                            </div>
+                            <div class="summary-card">
+                                <span>Opciones de cuotas</span>
+                                <strong id="paymentMaxInstallments">1</strong>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="numeroCuotas" class="required-label">Número de cuotas</label>
+                            <select id="numeroCuotas" name="NumeroCuotas"></select>
+                            <small class="helper-text">Cada fecha mostrada es la última fecha habilitada para pagar esa cuota. No puedes pagar una cuota si la anterior sigue pendiente.</small>
+                        </div>
+
+                        <div class="table-wrapper">
+                            <table class="installment-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cuota</th>
+                                        <th>Monto</th>
+                                        <th>Fecha límite</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paymentScheduleBody"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="plan-actions">
+                            <button type="button" id="backToFormButton" class="secondary-button">Volver a mis datos</button>
+                            <button type="button" id="confirmRegistrationButton">Confirmar inscripción</button>
+                        </div>
+                    </div>
+                </form>
+
+                <div id="successPanel" class="status-box status-success hidden-field">
+                    <h3>Inscripción Exitosa</h3>
+                    <p id="successMessage"></p>
+                    <div class="plan-actions">
+                        <a id="successPrimaryLink" class="program-link hidden-field" href="#">Ir ahora al pago</a>
+                        <a id="successTrackingLink" class="back-link" asp-action="Seguimiento">Ir a seguimiento de inscripciones y plan de pagos</a>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="public-admin-access">
+            <a class="admin-footer-link" asp-controller="Admin" asp-action="Login">Acceso administrativo</a>
+        </div>
+  </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script id="selectedCourseData" type="application/json">
+        @Html.Raw(curso is null ? "null" : JsonSerializer.Serialize(curso, jsonOptions))
+    </script>
+    <script>
+        window.inscripcionApp = {
+            registrarUrl: '@Url.Action("Registrar", "InscripcionCIS")',
+            consultarDniUrl: '@Url.Action("ConsultarDni", "InscripcionCIS")',
+            seguimientoUrl: '@Url.Action("Seguimiento", "InscripcionCIS")',
+            selectedCourseId: @(curso?.IdActividad.ToString() ?? "null"),
+            selectedCourseName: @Html.Raw(JsonSerializer.Serialize(curso?.NombreActividad, jsonOptions))
+        };
+    </script>
+    <script src="~/js/index.js" asp-append-version="true"></script>
+</body>
+</html>

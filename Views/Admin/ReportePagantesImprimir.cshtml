@@ -1,0 +1,114 @@
+@model CURSO_INTERCULTURALIDAD.Models.ReportePagantesViewModel
+@{
+    Layout = null;
+
+    static string Money(decimal value)
+    {
+        return value == 0m ? "--" : $"S/ {value:N2}";
+    }
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Reporte de estado de pagos</title>
+    <style>
+        body { color: #1f2933; font-family: Arial, sans-serif; margin: 24px; }
+        h1 { font-size: 24px; margin-bottom: 4px; }
+        h2 { border-bottom: 2px solid #d7dee8; font-size: 16px; margin-top: 24px; padding-bottom: 5px; }
+        .toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; }
+        button { background: #0f62fe; border: 0; border-radius: 8px; color: #fff; cursor: pointer; font-weight: 700; padding: 9px 14px; }
+        .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0; }
+        .summary div { border: 1px solid #ccd6e0; border-radius: 10px; padding: 10px; }
+        .summary span { color: #52616f; display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .summary strong { display: block; font-size: 18px; margin-top: 4px; }
+        table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+        th, td { border: 1px solid #b8c2cc; font-size: 12px; padding: 7px; }
+        th { background: #edf2f7; text-align: left; }
+        .num { text-align: right; }
+        @@media print { body { margin: 12mm; } .toolbar { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Guardar como PDF / imprimir</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+    {
+        <p>@Model.MensajeError</p>
+    }
+    else if (Model.Detalle is null)
+    {
+        <p>No hay datos para mostrar.</p>
+    }
+    else
+    {
+        var mostrarSinCobro = Model.Detalle.SinCobro > 0;
+
+        <h1>Reporte de estado de pagos por curso</h1>
+        <p><strong>Curso:</strong> @(string.IsNullOrWhiteSpace(Model.Detalle.NombreCurso) ? "Curso seleccionado" : Model.Detalle.NombreCurso)</p>
+        <p><strong>Generado:</strong> @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+
+        <div class="summary">
+            <div><span>Total registros</span><strong>@Model.Detalle.TotalInscritos</strong></div>
+            <div><span>Inscritos</span><strong>@(Model.Detalle.Pagados + Model.Detalle.PagadosParciales)</strong></div>
+            <div><span>Pre-inscritos</span><strong>@Model.Detalle.Pendientes</strong></div>
+            <div><span>Pagado</span><strong>@Model.Detalle.Pagados</strong></div>
+            <div><span>Pagado parcial</span><strong>@Model.Detalle.PagadosParciales</strong></div>
+            <div><span>Pendiente</span><strong>@Model.Detalle.Pendientes</strong></div>
+            @if (mostrarSinCobro)
+            {
+                <div><span>Sin cobro</span><strong>@Model.Detalle.SinCobro</strong></div>
+            }
+            <div><span>Monto pagado</span><strong>@Money(Model.Detalle.MontoPagadoTotal)</strong></div>
+            <div><span>Monto pendiente</span><strong>@Money(Model.Detalle.MontoPendienteTotal)</strong></div>
+            <div><span>Monto comprometido</span><strong>@Money(Model.Detalle.MontoComprometidoTotal)</strong></div>
+        </div>
+
+        <h2>Detalle de inscritos segun estado de pago</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Alumno</th>
+                    <th>DNI / Documento</th>
+                    <th>Celular</th>
+                    <th>Correo</th>
+                    <th>Institucion de procedencia</th>
+                    <th>Registro</th>
+                    <th>Ultimo pago</th>
+                    <th>Estado reporte</th>
+                    <th class="num">Monto pagado</th>
+                    <th class="num">Monto pendiente</th>
+                    <th class="num">Cuotas</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Detalle.Items.Count == 0)
+                {
+                    <tr><td colspan="11">No hay inscritos que coincidan con el filtro seleccionado.</td></tr>
+                }
+                else
+                {
+                    @foreach (var item in Model.Detalle.Items)
+                    {
+                        <tr>
+                            <td>@item.Nombres @item.Apellidos</td>
+                            <td>@item.NumeroDocumento</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)</td>
+                            <td>@(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)</td>
+                            <td>@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
+                            <td>@item.EstadoReportePagoEtiqueta</td>
+                            <td class="num">@Money(item.MontoPagado)</td>
+                            <td class="num">@Money(item.MontoPendiente)</td>
+                            <td class="num">@item.CuotasPagadas/@item.NumeroCuotas</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</body>
+</html>

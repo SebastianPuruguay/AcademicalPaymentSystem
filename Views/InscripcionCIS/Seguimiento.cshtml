@@ -1,0 +1,270 @@
+@model CURSO_INTERCULTURALIDAD.Models.SeguimientoPortalViewModel
+@{
+    Layout = null;
+    var dniConsultado = Model.DniConsultado ?? string.Empty;
+    var correoConsultado = Model.CorreoConsultado ?? string.Empty;
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seguimiento del Alumno | INSNSB</title>
+    <link rel="icon" type="image/png" href="~/favicon.png">
+    <link rel="stylesheet" href="~/css/index.css" asp-append-version="true">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="main-container">
+        <div class="selection-container">
+            <div class="description-topbar">
+                <a class="back-link" asp-action="Index">Regresar</a>
+            </div>
+
+            <span class="section-tag">Seguimiento</span>
+            <h1>Consulta tus inscripciones</h1>
+            <p>
+                Ingresa tu documento de identidad y el correo con el que te inscribiste. Te enviaremos un codigo de verificacion al correo para consultar tus cursos inscritos, cuotas pagadas y pendientes, y seguimiento.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+            {
+                <div class="status-box status-error">@Model.MensajeError</div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Model.MensajeInfo))
+            {
+                <div class="status-box status-success">@Model.MensajeInfo</div>
+            }
+
+            <div id="seguimientoClientFeedback" class="status-box" hidden></div>
+
+            <form id="seguimientoAccessForm" class="selection-form" novalidate>
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label for="dniAlumno">DNI/CE/PASAPORTE del alumno</label>
+                        <input type="text" id="dniAlumno" value="@dniConsultado" maxlength="20" required>
+                    </div>
+                    <div class="form-group half-width">
+                        <label for="correoSeguimiento">Correo registrado</label>
+                        <input type="email" id="correoSeguimiento" value="@correoConsultado" maxlength="300" required>
+                    </div>
+                </div>
+
+                <div class="plan-actions">
+                    <button type="button" id="requestVerificationCodeButton">Enviar codigo</button>
+                </div>
+
+                <div id="verificationSection" class="info-section hidden-field">
+                    <div class="form-group">
+                        <label for="verificationCodeInput">Codigo de verificacion</label>
+                        <input type="text" id="verificationCodeInput" maxlength="6" inputmode="numeric" placeholder="Ingresa el codigo de 6 digitos">
+                        <small class="helper-text" id="verificationHelperText">El codigo expira en pocos minutos. Si no llega, revisa spam o solicita uno nuevo.</small>
+                    </div>
+
+                    <div class="plan-actions">
+                        <button type="button" id="validateVerificationCodeButton">Validar codigo</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        @if (Model.Dashboard is not null)
+        {
+            <div class="description-container">
+                <span class="section-tag">Dashboard del Alumno</span>
+                <h1>@Model.Dashboard.Nombres @Model.Dashboard.Apellidos</h1>
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <span>Documento</span>
+                        <strong>@Model.Dashboard.NumeroDocumento</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Cursos pagados</span>
+                        <strong>@Model.Dashboard.CursosPagados.Count</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Con cuotas pendientes</span>
+                        <strong>@Model.Dashboard.CursosPagados.Count(item => item.CuotasPendientes > 0)</strong>
+                    </div>
+                    <div class="summary-card">
+                        <span>Historial total</span>
+                        <strong>@Model.Dashboard.HistorialCursos.Count</strong>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <h3>Cursos Pagados y Plan de Cuotas</h3>
+
+                    @if (Model.Dashboard.CursosPagados.Count == 0)
+                    {
+                        <div class="status-box status-success">
+                            No tienes cursos pagados registrados. Tu historial actual corresponde solo a cursos gratuitos o actividades sin deuda.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var cursoPago in Model.Dashboard.CursosPagados)
+                        {
+                            <div class="info-section">
+                                <div class="summary-grid">
+                                    <div class="summary-card">
+                                        <span>Curso</span>
+                                        <strong>@cursoPago.NombreCurso</strong>
+                                    </div>
+                                    <div class="summary-card">
+                                        <span>Estado</span>
+                                        <strong>@cursoPago.EstadoGeneral</strong>
+                                    </div>
+                                    <div class="summary-card">
+                                        <span>Costo final</span>
+                                        <strong>@(cursoPago.CostoFinal == 0m ? "--" : $"S/ {cursoPago.CostoFinal:N2}")</strong>
+                                    </div>
+                                    <div class="summary-card">
+                                        <span>Cuotas pendientes</span>
+                                        <strong>@cursoPago.CuotasPendientes</strong>
+                                    </div>
+                                </div>
+
+                                @if (cursoPago.Cuotas.Count == 0)
+                                {
+                                    <div class="status-box status-success">
+                                        Este curso no registra cuotas pendientes.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="status-box status-success payment-guidance">
+                                        Para activar tu curso debes pagar la primera cuota. Si ya realizaste el pago, revisa tu bandeja de entrada y tambien puedes refrescar esta pagina para ver el estado actualizado. El comprobante se enviara automaticamente a tu correo cuando IziPay lo emita.
+                                    </div>
+
+                                    <div class="table-wrapper">
+                                        <table class="installment-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Nro de Cuota</th>
+                                                    <th>Monto</th>
+                                                    <th>Fecha limite</th>
+                                                    <th>Estado</th>
+                                                    <th>Accion</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var cuota in cursoPago.Cuotas.OrderBy(item => item.NumeroCuota))
+                                                {
+                                                    <tr>
+                                                        <td data-label="Nro de Cuota">@cuota.NumeroCuota</td>
+                                                        <td data-label="Monto">@($"S/ {cuota.Monto:N2}")</td>
+                                                        <td data-label="Fecha limite">@cuota.FechaVencimiento.ToString("dd/MM/yyyy")</td>
+                                                        <td data-label="Estado">
+                                                            @if (string.Equals(cuota.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <span class="pill-success">PAGADO</span>
+                                                                @if (cuota.FechaPagoReal.HasValue)
+                                                                {
+                                                                    <div class="helper-text">Pagado el @cuota.FechaPagoReal.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                                                }
+                                                                @if (!string.IsNullOrWhiteSpace(cuota.EstadoIzipay))
+                                                                {
+                                                                    <div class="helper-text">Estado IziPay: @cuota.EstadoIzipay</div>
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="pill-warning">PENDIENTE</span>
+                                                                @if (!string.IsNullOrWhiteSpace(cuota.EstadoIzipay))
+                                                                {
+                                                                    <div class="helper-text">Estado IziPay: @cuota.EstadoIzipay</div>
+                                                                }
+                                                            }
+                                                        </td>
+                                                        <td data-label="Accion">
+                                                            @if (string.Equals(cuota.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                <div class="action-stack">
+                                                                    <button type="button" class="secondary-button" disabled>Pago confirmado</button>
+                                                                    @if (!string.IsNullOrWhiteSpace(cuota.NumeroComprobanteIzipay))
+                                                                    {
+                                                                        <div class="helper-text">Comprobante: @cuota.NumeroComprobanteIzipay</div>
+                                                                    }
+                                                                    @if (!string.IsNullOrWhiteSpace(cuota.CodigoAutorizacionIzipay))
+                                                                    {
+                                                                        <div class="helper-text">Codigo de autorizacion: @cuota.CodigoAutorizacionIzipay</div>
+                                                                    }
+                                                                    <div class="helper-text">El comprobante sera enviado automaticamente a tu correo.</div>
+                                                                </div>
+                                                            }
+                                                            else if (cuota.PuedePagarAhora && !string.IsNullOrWhiteSpace(cuota.UrlPagoPasarela))
+                                                            {
+                                                                <div class="action-stack">
+                                                                    <a class="program-link" href="@cuota.UrlPagoPasarela">Pagar Ahora</a>
+                                                                    @if (cuota.IdPagoIzipay.HasValue)
+                                                                    {
+                                                                        <div class="helper-text">Resumen IziPay #@cuota.IdPagoIzipay</div>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                            else if (!string.IsNullOrWhiteSpace(cuota.BloqueoPagoMensaje))
+                                                            {
+                                                                <div class="helper-text">@cuota.BloqueoPagoMensaje</div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="helper-text">Sin link</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="info-section">
+                    <h3>Historial General de Cursos</h3>
+
+                    <div class="table-wrapper">
+                        <table class="installment-table">
+                            <thead>
+                                <tr>
+                                    <th>Curso</th>
+                                    <th>Fecha registro</th>
+                                    <th>Estado pago</th>
+                                    <th>Costo final</th>
+                                    <th>Cuotas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.Dashboard.HistorialCursos)
+                                {
+                                    <tr>
+                                        <td data-label="Curso">@item.NombreCurso</td>
+                                        <td data-label="Fecha registro">@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td data-label="Estado pago">@item.EstadoPagoGeneral</td>
+                                        <td data-label="Costo final">@(item.CostoFinal == 0m ? "--" : $"S/ {item.CostoFinal:N2}")</td>
+                                        <td data-label="Cuotas">@item.NumeroCuotas</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <script>
+        window.seguimientoApp = {
+            solicitarCodigoUrl: '@Url.Action("SolicitarCodigoSeguimiento", "InscripcionCIS")',
+            validarCodigoUrl: '@Url.Action("ValidarCodigoSeguimiento", "InscripcionCIS")'
+        };
+    </script>
+    <script src="~/js/seguimiento.js" asp-append-version="true"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+@model CURSO_INTERCULTURALIDAD.Models.ReporteInscritosViewModel
+@{
+    Layout = null;
+
+    static string Money(decimal value)
+    {
+        return value == 0m ? "--" : $"S/ {value:N2}";
+    }
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Reporte de inscritos</title>
+    <style>
+        body { color: #1f2933; font-family: Arial, sans-serif; margin: 24px; }
+        h1 { font-size: 24px; margin-bottom: 4px; }
+        h2 { border-bottom: 2px solid #d7dee8; font-size: 16px; margin-top: 24px; padding-bottom: 5px; }
+        .toolbar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 18px; }
+        button { background: #0f62fe; border: 0; border-radius: 8px; color: #fff; cursor: pointer; font-weight: 700; padding: 9px 14px; }
+        .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0; }
+        .summary div { border: 1px solid #ccd6e0; border-radius: 10px; padding: 10px; }
+        .summary span { color: #52616f; display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .summary strong { display: block; font-size: 18px; margin-top: 4px; }
+        table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+        th, td { border: 1px solid #b8c2cc; font-size: 12px; padding: 7px; }
+        th { background: #edf2f7; text-align: left; }
+        .num { text-align: right; }
+        @@media print { body { margin: 12mm; } .toolbar { display: none; } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Guardar como PDF / imprimir</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
+    {
+        <p>@Model.MensajeError</p>
+    }
+    else if (Model.Detalle is null)
+    {
+        <p>No hay datos para mostrar.</p>
+    }
+    else
+    {
+        var resumen = Model.Detalle.Resumen;
+        var mostrarSinCobro = resumen.SinCobro > 0;
+        var tablas = new[]
+        {
+            new { Titulo = "Inscritos por pais", Items = Model.Detalle.PorPais },
+            new { Titulo = "Inscritos por region", Items = Model.Detalle.PorRegion },
+            new { Titulo = "Inscritos por institucion de procedencia", Items = Model.Detalle.PorInstitucion },
+            new { Titulo = "Internos vs externos", Items = Model.Detalle.PorTipoParticipante }
+        };
+
+        <h1>Reporte de inscritos por curso</h1>
+        <p><strong>Curso:</strong> @(string.IsNullOrWhiteSpace(resumen.NombreCurso) ? "Curso seleccionado" : resumen.NombreCurso)</p>
+        <p><strong>Generado:</strong> @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</p>
+
+        <div class="summary">
+            <div><span>Total registros</span><strong>@resumen.TotalInscritos</strong></div>
+            <div><span>Inscritos</span><strong>@(resumen.Pagados + resumen.PagadosParciales)</strong></div>
+            <div><span>Pre-inscritos</span><strong>@resumen.Pendientes</strong></div>
+            <div><span>Internos INSNSB</span><strong>@resumen.Internos</strong></div>
+            <div><span>Externos</span><strong>@resumen.Externos</strong></div>
+            <div><span>Pagado</span><strong>@resumen.Pagados</strong></div>
+            <div><span>Pagado parcial</span><strong>@resumen.PagadosParciales</strong></div>
+            <div><span>Pendiente</span><strong>@resumen.Pendientes</strong></div>
+            @if (mostrarSinCobro)
+            {
+                <div><span>Sin cobro</span><strong>@resumen.SinCobro</strong></div>
+            }
+            <div><span>Monto pagado</span><strong>@Money(resumen.MontoPagado)</strong></div>
+            <div><span>Deuda pendiente</span><strong>@Money(resumen.MontoDeuda)</strong></div>
+            <div><span>Total pagado + deuda</span><strong>@Money(resumen.MontoTotal)</strong></div>
+        </div>
+
+        @foreach (var tabla in tablas)
+        {
+            <h2>@tabla.Titulo</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Categoria</th>
+                        <th class="num">Total</th>
+                        <th class="num">Inscritos</th>
+                        <th class="num">Pre-inscritos</th>
+                        <th class="num">Internos</th>
+                        <th class="num">Externos</th>
+                        <th class="num">Pagado</th>
+                        <th class="num">Pagado parcial</th>
+                        <th class="num">Pendiente</th>
+                        @if (mostrarSinCobro)
+                        {
+                            <th class="num">Sin cobro</th>
+                        }
+                        <th class="num">Monto pagado</th>
+                        <th class="num">Deuda</th>
+                        <th class="num">Total S/</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (tabla.Items.Count == 0)
+                    {
+                        <tr><td colspan="@(mostrarSinCobro ? 13 : 12)">No hay datos para mostrar.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in tabla.Items)
+                        {
+                            <tr>
+                                <td>@item.Categoria</td>
+                                <td class="num">@item.TotalInscritos</td>
+                                <td class="num">@(item.Pagados + item.PagadosParciales)</td>
+                                <td class="num">@item.Pendientes</td>
+                                <td class="num">@item.Internos</td>
+                                <td class="num">@item.Externos</td>
+                                <td class="num">@item.Pagados</td>
+                                <td class="num">@item.PagadosParciales</td>
+                                <td class="num">@item.Pendientes</td>
+                                @if (mostrarSinCobro)
+                                {
+                                    <td class="num">@item.SinCobro</td>
+                                }
+                                <td class="num">@Money(item.MontoPagado)</td>
+                                <td class="num">@Money(item.MontoDeuda)</td>
+                                <td class="num">@Money(item.MontoTotal)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</body>
+</html>

@@ -1,0 +1,100 @@
+@model CURSO_INTERCULTURALIDAD.Models.CursoPagadoResumen
+@{
+    var bannerUrl = string.IsNullOrWhiteSpace(Model.UrlBannerWeb)
+        ? Url.Content("~/Head_Interculturalidad.jpg")
+        : Model.UrlBannerWeb;
+    var telefonoContacto = string.IsNullOrWhiteSpace(Model.CelularContactoActividad)
+        ? "+51 913 452 763"
+        : Model.CelularContactoActividad;
+
+    static string FormatearCosto(decimal? monto, string fallback)
+    {
+        if (!monto.HasValue)
+        {
+            return fallback;
+        }
+
+        return monto.Value == 0m ? "--" : $"S/ {monto.Value:N2}";
+    }
+
+    static string FormatearOpcionesCuotas(CURSO_INTERCULTURALIDAD.Models.CursoPagadoResumen curso)
+    {
+        var opciones = (curso.OpcionesCuotas ?? [])
+            .Where(opcion => opcion > 0)
+            .Distinct()
+            .OrderBy(opcion => opcion)
+            .ToList();
+
+        if (opciones.Count > 0)
+        {
+            return $"{string.Join(" o ", opciones)} cuota(s)";
+        }
+
+        return curso.MaxCuotas.GetValueOrDefault() > 0
+            ? $"1 a {curso.MaxCuotas} cuota(s)"
+            : "Sin cuotas";
+    }
+}
+
+<div class="course-preview-shell">
+    <div class="course-preview-banner">
+        <img src="@bannerUrl" alt="Vista previa del banner del curso" loading="lazy" />
+    </div>
+
+    <div class="course-preview-content">
+        <span class="admin-eyebrow">Vista pública</span>
+        <h3>@Model.NombreActividad</h3>
+        <p>
+            @(string.IsNullOrWhiteSpace(Model.TextoDirigidoA)
+                ? "Completa el formulario con los datos del participante. Este flujo esta pensado para inscripciones por internet y acceso directo por enlace."
+                : Model.TextoDirigidoA)
+        </p>
+
+        <div class="course-preview-summary">
+            <div class="course-preview-card">
+                <span>Tarifa general</span>
+                <strong>@FormatearCosto(Model.CostoBase, "Por confirmar")</strong>
+            </div>
+            <div class="course-preview-card">
+                <span>Tarifa trabajador INSNSB</span>
+                <strong>Comunicarse al @telefonoContacto</strong>
+            </div>
+            <div class="course-preview-card">
+                <span>Opciones de cuotas</span>
+                <strong>@FormatearOpcionesCuotas(Model)</strong>
+            </div>
+            <div class="course-preview-card">
+                <span>Modalidad</span>
+                <strong>@(string.IsNullOrWhiteSpace(Model.Modalidad) ? "Por confirmar" : Model.Modalidad)</strong>
+            </div>
+        </div>
+
+        <div class="course-preview-detail">
+            <div>
+                <span>Fechas</span>
+                <strong>@(string.IsNullOrWhiteSpace(Model.TextoFechasDuracion) ? "Por confirmar" : Model.TextoFechasDuracion)</strong>
+            </div>
+            <div>
+                <span>Horario</span>
+                <strong>@(string.IsNullOrWhiteSpace(Model.HorarioTexto) ? "Por confirmar" : Model.HorarioTexto)</strong>
+            </div>
+            <div>
+                <span>Lugar</span>
+                <strong>@(string.IsNullOrWhiteSpace(Model.LugarActividad) ? "Por confirmar" : Model.LugarActividad)</strong>
+            </div>
+        </div>
+
+        <div class="course-preview-links">
+            <span class="status-badge @(string.Equals(Model.VisibleEnFormulario, "Si", StringComparison.OrdinalIgnoreCase) ? "available" : "used")">
+                @(string.Equals(Model.VisibleEnFormulario, "Si", StringComparison.OrdinalIgnoreCase) ? "Visible en formulario" : "Oculto en formulario")
+            </span>
+
+            @if (!string.IsNullOrWhiteSpace(Model.UrlProgramaWeb))
+            {
+                <a href="@Model.UrlProgramaWeb" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">
+                    Ver programa
+                </a>
+            }
+        </div>
+    </div>
+</div>
