@@ -455,7 +455,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 input,
                 vistaPrevia,
                 null,
-                "Vista previa actualizada. Aun no se guardaron cambios en la base de datos."));
+                "Vista previa actualizada. Aún no se guardaron cambios en la base de datos."));
         }
 
         [HttpPost]

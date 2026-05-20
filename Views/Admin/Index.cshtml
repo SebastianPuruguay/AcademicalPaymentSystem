@@ -11,8 +11,8 @@
     <div class="admin-toolbar">
         <div>
             <span class="admin-eyebrow">INSNSB - Administracion</span>
-            <h1>Panel de cursos y codigos unicos</h1>
-            <p>Administra la visibilidad del formulario publico, corrige la ficha del curso antes de publicarla y revisa pagos o codigos unicos desde un solo lugar.</p>
+            <h1>Panel de cursos y códigos únicos</h1>
+            <p>Administra la visibilidad del formulario publico, corrige la ficha del curso antes de publicarla y revisa pagos o códigos únicos desde un solo lugar.</p>
         </div>
         <div class="admin-toolbar-actions">
             <a class="btn btn-outline-primary" asp-action="ReporteInscritos" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte inscritos</a>
@@ -76,7 +76,7 @@
         </section>
 
         <section class="admin-card">
-            <h2>Asignar codigo a documento</h2>
+            <h2>Asignar código a documento</h2>
             <form asp-action="GenerarCodigos" method="post" class="admin-form-stack">
                 @Html.AntiForgeryToken()
                 <input type="hidden" asp-for="Formulario.CursoId" value="@Model.CursoSeleccionadoId" />
@@ -93,7 +93,7 @@
                 </div>
                 <div>
                     <label asp-for="Formulario.Observacion" class="form-label">Observacion</label>
-                    <textarea asp-for="Formulario.Observacion" class="form-control" rows="3" placeholder="Ej. Codigo reservado para la segunda convocatoria interna"></textarea>
+                    <textarea asp-for="Formulario.Observacion" class="form-control" rows="3" placeholder="Ej. Código reservado para la segunda convocatoria interna"></textarea>
                     <span asp-validation-for="Formulario.Observacion" class="text-danger"></span>
                 </div>
                 @if (Model.CursoSeleccionadoId.HasValue)
@@ -117,11 +117,11 @@
     }
 
     <section class="admin-card">
-        <h2>Ultimos codigos del curso</h2>
+        <h2>Últimos códigos del curso</h2>
 
         @if (Model.Codigos.Count == 0)
         {
-            <p class="text-muted mb-0">Aun no hay codigos registrados para este curso.</p>
+            <p class="text-muted mb-0">Aún no hay códigos registrados para este curso.</p>
         }
         else
         {
@@ -129,12 +129,12 @@
                 <table class="table table-hover align-middle">
                     <thead>
                         <tr>
-                            <th>Codigo</th>
+                            <th>Código</th>
                             <th>Documento asignado</th>
                             <th>Estado</th>
                             <th>Generado</th>
                             <th>Usado por</th>
-                            <th>Observacion</th>
+                            <th>Observación</th>
                             <th class="text-end">Accion</th>
                         </tr>
                     </thead>
@@ -167,8 +167,8 @@
                                         <input type="hidden" name="codigoId" value="@codigo.IdCodigo" />
                                         <button type="submit"
                                                 class="btn btn-sm btn-outline-danger"
-                                                data-confirm-title="Eliminar codigo INSNSB"
-                                                data-confirm-message="Se eliminara el codigo @codigo.Codigo. Esta accion no se puede deshacer.">
+                                                data-confirm-title="Eliminar código INSNSB"
+                                                data-confirm-message="Se eliminara el código @codigo.Codigo. Esta accion no se puede deshacer.">
                                             Eliminar
                                         </button>
                                     </form>
@@ -201,7 +201,7 @@
         }
         else if (Model.SeguimientoPagos.Alumnos.Count == 0)
         {
-            <p class="text-muted mb-0">Este curso aun no registra inscripciones pagadas con plan de cuotas.</p>
+            <p class="text-muted mb-0">Este curso aún no registra inscripciones pagadas con plan de cuotas.</p>
         }
         else
         {
@@ -289,7 +289,7 @@
                                             <button type="submit"
                                                     class="btn btn-sm btn-outline-danger"
                                                     data-confirm-title="Eliminar inscrito"
-                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos, su plan de cuotas y sus datos de seguimiento. Si uso codigo INSNSB, el codigo quedara disponible nuevamente.">
+                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos, su plan de cuotas y sus datos de seguimiento. Si uso código INSNSB, el código quedara disponible nuevamente.">
                                                 Eliminar
                                             </button>
                                         </form>

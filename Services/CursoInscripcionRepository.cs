@@ -896,7 +896,7 @@ WHERE d.id_pago_izipay = @IdPagoIzipay;",
             }
             catch (SqlException ex) when (ex.Number == 8144)
             {
-                _logger.LogWarning(ex, "El SP de actualizacion IziPay aun no admite los nuevos campos de comprobante. Se ejecutara modo compatible.");
+                _logger.LogWarning(ex, "El SP de actualizacion IziPay aún no admite los nuevos campos de comprobante. Se ejecutara modo compatible.");
 
                 await using var command = CreateStoredProcedure("dbo.sp_docencia_actualizar_estado_pago_izipay", connection);
                 AgregarParametrosActualizarEstadoPagoIzipay(command, estadoPago, incluirComprobante: false);

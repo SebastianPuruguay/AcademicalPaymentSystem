@@ -26,7 +26,7 @@
             <span class="section-tag">Seguimiento</span>
             <h1>Consulta tus inscripciones</h1>
             <p>
-                Ingresa tu documento de identidad y el correo con el que te inscribiste. Te enviaremos un codigo de verificacion al correo para consultar tus cursos inscritos, cuotas pagadas y pendientes, y seguimiento.
+                Ingresa tu documento de identidad y el correo con el que te inscribiste. Te enviaremos un código de verificacion al correo para consultar tus cursos inscritos, cuotas pagadas y pendientes, y seguimiento.
             </p>
 
             @if (!string.IsNullOrWhiteSpace(Model.MensajeError))
@@ -54,18 +54,18 @@
                 </div>
 
                 <div class="plan-actions">
-                    <button type="button" id="requestVerificationCodeButton">Enviar codigo</button>
+                    <button type="button" id="requestVerificationCodeButton">Enviar código</button>
                 </div>
 
                 <div id="verificationSection" class="info-section hidden-field">
                     <div class="form-group">
-                        <label for="verificationCodeInput">Codigo de verificacion</label>
-                        <input type="text" id="verificationCodeInput" maxlength="6" inputmode="numeric" placeholder="Ingresa el codigo de 6 digitos">
-                        <small class="helper-text" id="verificationHelperText">El codigo expira en pocos minutos. Si no llega, revisa spam o solicita uno nuevo.</small>
+                        <label for="verificationCodeInput">Código de verificación</label>
+                        <input type="text" id="verificationCodeInput" maxlength="6" inputmode="numeric" placeholder="Ingresa el código de 6 dígitos">
+                        <small class="helper-text" id="verificationHelperText">El código expira en pocos minutos. Si no llega, revisa spam o solicita uno nuevo.</small>
                     </div>
 
                     <div class="plan-actions">
-                        <button type="button" id="validateVerificationCodeButton">Validar codigo</button>
+                        <button type="button" id="validateVerificationCodeButton">Validar código</button>
                     </div>
                 </div>
             </form>

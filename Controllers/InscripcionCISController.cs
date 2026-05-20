@@ -333,7 +333,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
 
             if (!pago.PuedePagarAhora)
             {
-                TempData["PagoDemoError"] = pago.BloqueoPagoMensaje ?? "La cuota seleccionada aun no puede pagarse.";
+                TempData["PagoDemoError"] = pago.BloqueoPagoMensaje ?? "La cuota seleccionada aún no puede pagarse.";
                 return Redirect(pago.VolverUrl ?? Url.Action(nameof(Seguimiento), new { dni = pago.NumeroDocumento }) ?? "/InscripcionCIS/Seguimiento");
             }
 
