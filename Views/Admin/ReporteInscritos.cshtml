@@ -6,6 +6,9 @@
     {
         return value == 0m ? "--" : $"S/ {value:N2}";
     }
+
+    var cursoActual = Model.Cursos.FirstOrDefault(item => item.IdActividad == Model.CursoSeleccionadoId);
+    var cursoTieneCobro = string.Equals(cursoActual?.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -80,51 +83,72 @@
             <div class="admin-section-header">
                 <div>
                     <h2>@(string.IsNullOrWhiteSpace(resumen.NombreCurso) ? "Curso seleccionado" : resumen.NombreCurso)</h2>
-                    <p class="admin-section-copy">Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente.</p>
+                    <p class="admin-section-copy">
+                        @(cursoTieneCobro
+                            ? "Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente. Los montos excluyen pre-inscritos sin ningun pago."
+                            : "Seguimiento de inscritos del curso gratuito. No se muestran montos, cuotas ni estados de pago.")
+                    </p>
                 </div>
             </div>
 
             <div class="report-metric-grid">
                 <div class="report-metric-card">
-                    <span>Total registros</span>
+                    <span>Total registros <span class="report-help-tip" tabindex="0" title="Cantidad total de registros del curso seleccionado.">?</span></span>
                     <strong>@resumen.TotalInscritos</strong>
                 </div>
-                <div class="report-metric-card">
-                    <span>Inscritos</span>
-                    <strong>@(resumen.Pagados + resumen.PagadosParciales)</strong>
-                </div>
-                <div class="report-metric-card">
-                    <span>Pre-inscritos</span>
-                    <strong>@resumen.Pendientes</strong>
-                </div>
-                <div class="report-metric-card">
-                    <span>Internos INSNSB</span>
-                    <strong>@resumen.Internos</strong>
-                </div>
-                <div class="report-metric-card">
-                    <span>Externos</span>
-                    <strong>@resumen.Externos</strong>
-                </div>
-
-                @if (mostrarSinCobro)
+                @if (cursoTieneCobro)
                 {
                     <div class="report-metric-card">
-                        <span>Sin cobro</span>
-                        <strong>@resumen.SinCobro</strong>
+                        <span>Inscritos <span class="report-help-tip" tabindex="0" title="Alumnos con estado Pagado o Pagado parcial. Son los que ya realizaron al menos un pago o completaron el pago.">?</span></span>
+                        <strong>@(resumen.Pagados + resumen.PagadosParciales)</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>Pre-inscritos <span class="report-help-tip" tabindex="0" title="Alumnos con estado Pendiente. Aun no tienen ninguna cuota pagada y no se consideran en los montos.">?</span></span>
+                        <strong>@resumen.Pendientes</strong>
                     </div>
                 }
                 <div class="report-metric-card">
-                    <span>Monto pagado</span>
-                    <strong>@Money(resumen.MontoPagado)</strong>
+                    <span>Internos INSNSB <span class="report-help-tip" tabindex="0" title="Registros cuya institucion corresponde al INSNSB o fue identificada como interna.">?</span></span>
+                    <strong>@resumen.Internos</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Deuda pendiente</span>
-                    <strong>@Money(resumen.MontoDeuda)</strong>
+                    <span>Externos <span class="report-help-tip" tabindex="0" title="Registros de participantes cuya institucion no corresponde al INSNSB.">?</span></span>
+                    <strong>@resumen.Externos</strong>
                 </div>
-                <div class="report-metric-card">
-                    <span>Total pagado + deuda</span>
-                    <strong>@Money(resumen.MontoTotal)</strong>
-                </div>
+                @if (cursoTieneCobro)
+                {
+                    <div class="report-metric-card">
+                        <span>Inscritos totales <span class="report-help-tip" tabindex="0" title="Alumnos que completaron el pago de todas sus cuotas.">?</span></span>
+                        <strong>@resumen.Pagados</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>Inscritos parciales <span class="report-help-tip" tabindex="0" title="Alumnos que pagaron una o mas cuotas, pero aun mantienen deuda pendiente.">?</span></span>
+                        <strong>@resumen.PagadosParciales</strong>
+                    </div>
+                }
+
+                @if (cursoTieneCobro && mostrarSinCobro)
+                {
+                    <div class="report-metric-card">
+                        <span>Sin cobro <span class="report-help-tip" tabindex="0" title="Alumnos cuyo costo final registrado fue S/ 0.00.">?</span></span>
+                        <strong>@resumen.SinCobro</strong>
+                    </div>
+                }
+                @if (cursoTieneCobro)
+                {
+                    <div class="report-metric-card">
+                        <span>Monto pagado (Inscritos) <span class="report-help-tip" tabindex="0" title="Suma del dinero efectivamente pagado por los inscritos del curso seleccionado.">?</span></span>
+                        <strong>@Money(resumen.MontoPagado)</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>Deuda pendiente con pago (Inscritos) <span class="report-help-tip" tabindex="0" title="Suma de deuda restante solo de alumnos que ya pagaron al menos una cuota. Excluye pre-inscritos sin pagos.">?</span></span>
+                        <strong>@Money(resumen.MontoDeuda)</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>Total comprometido con pago <span class="report-help-tip" tabindex="0" title="Monto total esperado de inscritos con pago parcial o completo. Es pagado mas deuda pendiente con pago.">?</span></span>
+                        <strong>@Money(resumen.MontoTotal)</strong>
+                    </div>
+                }
             </div>
         </section>
 
@@ -145,20 +169,26 @@
                                 <tr>
                                     <th>Categoria</th>
                                     <th class="text-end">Total</th>
-                                    <th class="text-end">Inscritos</th>
-                                    <th class="text-end">Pre-inscritos</th>
+                                    @if (cursoTieneCobro)
+                                    {
+                                        <th class="text-end">Inscritos</th>
+                                        <th class="text-end">Pre-inscritos</th>
+                                    }
                                     <th class="text-end">Internos</th>
                                     <th class="text-end">Externos</th>
-                                    <th class="text-end">Pagado</th>
-                                    <th class="text-end">Pagado parcial</th>
-                                    <th class="text-end">Pendiente</th>
-                                    @if (mostrarSinCobro)
+                                    @if (cursoTieneCobro)
                                     {
-                                        <th class="text-end">Sin cobro</th>
+                                        <th class="text-end">Pagado</th>
+                                        <th class="text-end">Pagado parcial</th>
+                                        <th class="text-end">Pendiente</th>
+                                        @if (mostrarSinCobro)
+                                        {
+                                            <th class="text-end">Sin cobro</th>
+                                        }
+                                        <th class="text-end">Monto pagado</th>
+                                        <th class="text-end">Deuda</th>
+                                        <th class="text-end">Total S/</th>
                                     }
-                                    <th class="text-end">Monto pagado</th>
-                                    <th class="text-end">Deuda</th>
-                                    <th class="text-end">Total S/</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -167,20 +197,26 @@
                                     <tr>
                                         <td class="table-primary-text">@item.Categoria</td>
                                         <td class="text-end">@item.TotalInscritos</td>
-                                        <td class="text-end">@(item.Pagados + item.PagadosParciales)</td>
-                                        <td class="text-end">@item.Pendientes</td>
+                                        @if (cursoTieneCobro)
+                                        {
+                                            <td class="text-end">@(item.Pagados + item.PagadosParciales)</td>
+                                            <td class="text-end">@item.Pendientes</td>
+                                        }
                                         <td class="text-end">@item.Internos</td>
                                         <td class="text-end">@item.Externos</td>
-                                        <td class="text-end">@item.Pagados</td>
-                                        <td class="text-end">@item.PagadosParciales</td>
-                                        <td class="text-end">@item.Pendientes</td>
-                                        @if (mostrarSinCobro)
+                                        @if (cursoTieneCobro)
                                         {
-                                            <td class="text-end">@item.SinCobro</td>
+                                            <td class="text-end">@item.Pagados</td>
+                                            <td class="text-end">@item.PagadosParciales</td>
+                                            <td class="text-end">@item.Pendientes</td>
+                                            @if (mostrarSinCobro)
+                                            {
+                                                <td class="text-end">@item.SinCobro</td>
+                                            }
+                                            <td class="text-end">@Money(item.MontoPagado)</td>
+                                            <td class="text-end">@Money(item.MontoDeuda)</td>
+                                            <td class="text-end">@Money(item.MontoTotal)</td>
                                         }
-                                        <td class="text-end">@Money(item.MontoPagado)</td>
-                                        <td class="text-end">@Money(item.MontoDeuda)</td>
-                                        <td class="text-end">@Money(item.MontoTotal)</td>
                                     </tr>
                                 }
                             </tbody>

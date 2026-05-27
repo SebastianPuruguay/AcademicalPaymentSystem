@@ -28,6 +28,9 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string? UrlBannerWeb { get; set; }
         public string? UrlProgramaWeb { get; set; }
         public bool RestriccionInscripcionUnica { get; set; }
+        public bool EsGratisGlobal => string.Equals(SeCobra, "No", StringComparison.OrdinalIgnoreCase);
+        public bool TieneLogicaCobro => string.Equals(SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
+        public bool RequierePago(decimal costoFinal) => TieneLogicaCobro && costoFinal > 0m;
     }
 
     public sealed class PaginaInscripcionCursosViewModel
@@ -489,6 +492,7 @@ namespace CURSO_INTERCULTURALIDAD.Models
 
     public sealed class ReporteInscritosCursoDetalle
     {
+        public bool CursoTieneCobro { get; set; }
         public ReporteInscritosCursoResumen Resumen { get; init; } = new();
         public IReadOnlyList<ReporteInscritosAgrupacionItem> PorPais { get; init; } = [];
         public IReadOnlyList<ReporteInscritosAgrupacionItem> PorRegion { get; init; } = [];

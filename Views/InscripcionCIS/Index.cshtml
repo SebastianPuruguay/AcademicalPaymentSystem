@@ -14,6 +14,12 @@
     var telefonoContactoCurso = string.IsNullOrWhiteSpace(curso?.CelularContactoActividad)
         ? "+51 913 452 763"
         : curso.CelularContactoActividad;
+    var mostrarTarifaInsnsb = curso is not null &&
+        string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase) &&
+        decimal.Round(curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero) !=
+        decimal.Round(curso.CostoPersonalInsnsb ?? curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+    var mostrarTarifasCurso = curso is not null &&
+        string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
     static string FormatearCosto(decimal? monto, string fallback)
     {
         if (!monto.HasValue)
@@ -114,20 +120,29 @@
                 </p>
 
                 <div class="summary-grid">
-                    <div class="summary-card">
-                        <span>Tarifa general</span>
-                        <strong>@FormatearCosto(curso.CostoBase, "Por confirmar")</strong>
-                    </div>
-                    <div class="summary-card">
-                        <span>Tarifa trabajador INSNSB</span>
-                        <strong id="courseInternalCost">
-                            Comunicarse al @telefonoContactoCurso
-                        </strong>
-                    </div>
-                    <div class="summary-card">
-                        <span>Opciones de cuotas</span>
-                        <strong>@FormatearOpcionesCuotas(curso)</strong>
-                    </div>
+                    @if (mostrarTarifasCurso)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Tarifa general</span>
+                            <strong>@FormatearCosto(curso.CostoBase, "Por confirmar")</strong>
+                        </div>
+                    }
+                    @if (mostrarTarifaInsnsb)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Tarifa trabajador INSNSB</span>
+                            <strong id="courseInternalCost">
+                                Comunicarse al @telefonoContactoCurso
+                            </strong>
+                        </div>
+                    }
+                    @if (mostrarTarifasCurso)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Opciones de cuotas</span>
+                            <strong>@FormatearOpcionesCuotas(curso)</strong>
+                        </div>
+                    }
                     <div class="summary-card">
                         <span>Modalidad</span>
                         <strong>@(string.IsNullOrWhiteSpace(curso.Modalidad) ? "Por confirmar" : curso.Modalidad)</strong>
@@ -381,7 +396,7 @@
                     <p id="successMessage"></p>
                     <div class="plan-actions">
                         <a id="successPrimaryLink" class="program-link hidden-field" href="#">Ir ahora al pago</a>
-                        <a id="successTrackingLink" class="back-link" asp-action="Seguimiento">Ir a seguimiento de inscripciones y plan de pagos</a>
+                        <a id="successTrackingLink" class="back-link" asp-action="Seguimiento">Ir a seguimiento de inscripciones</a>
                     </div>
                 </div>
             </div>

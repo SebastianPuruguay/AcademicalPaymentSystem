@@ -1,7 +1,12 @@
-@model CURSO_INTERCULTURALIDAD.Models.PanelAdminCodigosViewModel
+﻿@model CURSO_INTERCULTURALIDAD.Models.PanelAdminCodigosViewModel
 @{
     ViewData["Title"] = "Panel Admin";
     var cursoActual = Model.Cursos.FirstOrDefault(item => item.IdActividad == Model.CursoSeleccionadoId);
+    var cursoTieneCobro = string.Equals(cursoActual?.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
+    var requiereCodigoInsnsb = cursoTieneCobro
+        && (cursoActual?.CostoPersonalInsnsb ?? 0m) > 0m
+        && decimal.Round(cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero) !=
+           decimal.Round(cursoActual?.CostoPersonalInsnsb ?? cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -16,7 +21,10 @@
         </div>
         <div class="admin-toolbar-actions">
             <a class="btn btn-outline-primary" asp-action="ReporteInscritos" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte inscritos</a>
-            <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte pagantes</a>
+            @if (cursoTieneCobro)
+            {
+                <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte pagantes</a>
+            }
             <form asp-action="Logout" method="post">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-outline-secondary">Cerrar sesion</button>
@@ -60,11 +68,15 @@
             @if (Model.CursoSeleccionadoId.HasValue)
             {
                 <div class="stats-pills">
-                    <span>Total: <strong>@Model.TotalCodigos</strong></span>
-                    <span>Disponibles: <strong>@Model.CodigosDisponibles</strong></span>
-                    <span>Usados: <strong>@Model.CodigosUsados</strong></span>
+                    @if (requiereCodigoInsnsb)
+                    {
+                        <span>Total codigos: <strong>@Model.TotalCodigos</strong></span>
+                        <span>Disponibles: <strong>@Model.CodigosDisponibles</strong></span>
+                        <span>Usados: <strong>@Model.CodigosUsados</strong></span>
+                    }
                     <span>Visible al alumno: <strong>@(cursoActual?.VisibleEnFormulario ?? "Si")</strong></span>
                     <span>Historico admin: <strong>@(cursoActual?.FuePagadoHistorico ?? "No")</strong></span>
+                    <span>Se cobra: <strong>@(cursoActual?.SeCobra ?? "No")</strong></span>
                 </div>
 
                 <div class="admin-card-actions">
@@ -75,6 +87,8 @@
             }
         </section>
 
+        @if (requiereCodigoInsnsb)
+        {
         <section class="admin-card">
             <h2>Asignar código a documento</h2>
             <form asp-action="GenerarCodigos" method="post" class="admin-form-stack">
@@ -92,7 +106,7 @@
                     <span asp-validation-for="Formulario.GeneradoPor" class="text-danger"></span>
                 </div>
                 <div>
-                    <label asp-for="Formulario.Observacion" class="form-label">Observacion</label>
+                    <label asp-for="Formulario.Observacion" class="form-label">Observación</label>
                     <textarea asp-for="Formulario.Observacion" class="form-control" rows="3" placeholder="Ej. Código reservado para la segunda convocatoria interna"></textarea>
                     <span asp-validation-for="Formulario.Observacion" class="text-danger"></span>
                 </div>
@@ -106,9 +120,10 @@
                 }
             </form>
         </section>
+        }
     </div>
 
-    @if (Model.CodigosGenerados.Count > 0)
+    @if (requiereCodigoInsnsb && Model.CodigosGenerados.Count > 0)
     {
         <section class="admin-card">
             <h2>Codigos recien generados</h2>
@@ -116,6 +131,8 @@
         </section>
     }
 
+    @if (requiereCodigoInsnsb)
+    {
     <section class="admin-card">
         <h2>Últimos códigos del curso</h2>
 
@@ -180,14 +197,19 @@
             </div>
         }
     </section>
+    }
 
     <section class="admin-card">
         <div class="admin-section-header">
             <div>
-                <h2>Seguimiento de pagos</h2>
-                <p class="admin-section-copy">Consulta por curso el estado de pago de cada alumno y abre el detalle de cuotas solo cuando lo necesites.</p>
+                <h2>@(cursoTieneCobro ? "Seguimiento de pagos" : "Seguimiento de inscripciones")</h2>
+                <p class="admin-section-copy">
+                    @(cursoTieneCobro
+                        ? "Consulta por curso el estado de pago de cada alumno y abre el detalle de cuotas solo cuando lo necesites."
+                        : "Consulta por curso los alumnos inscritos y sus datos principales de contacto.")
+                </p>
             </div>
-            @if (Model.CursoSeleccionadoId.HasValue)
+            @if (cursoTieneCobro && Model.CursoSeleccionadoId.HasValue)
             {
                 <div class="admin-toolbar-actions">
                     <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Abrir reporte de pagantes</a>
@@ -197,11 +219,11 @@
 
         @if (!Model.CursoSeleccionadoId.HasValue)
         {
-            <p class="text-muted mb-0">Seleccione un curso para revisar sus pagos.</p>
+            <p class="text-muted mb-0">Seleccione un curso para revisar sus inscripciones.</p>
         }
         else if (Model.SeguimientoPagos.Alumnos.Count == 0)
         {
-            <p class="text-muted mb-0">Este curso aún no registra inscripciones pagadas con plan de cuotas.</p>
+            <p class="text-muted mb-0">Este curso aun no registra inscripciones.</p>
         }
         else
         {
@@ -217,10 +239,17 @@
 
             <div class="stats-pills">
                 <span>Inscripciones: <strong>@Model.SeguimientoPagos.TotalInscripciones</strong></span>
-                <span>Con deuda: <strong>@Model.SeguimientoPagos.ConDeudaPendiente</strong></span>
-                <span>Pagados: <strong>@Model.SeguimientoPagos.CompletamentePagados</strong></span>
-                <span>Monto pagado: <strong>@(Model.SeguimientoPagos.MontoPagado == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPagado:N2}")</strong></span>
-                <span>Monto pendiente: <strong>@(Model.SeguimientoPagos.MontoPendiente == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPendiente:N2}")</strong></span>
+                @if (cursoTieneCobro)
+                {
+                    <span>Con deuda: <strong>@Model.SeguimientoPagos.ConDeudaPendiente</strong></span>
+                    <span>Pagados: <strong>@Model.SeguimientoPagos.CompletamentePagados</strong></span>
+                    <span>Monto pagado: <strong>@(Model.SeguimientoPagos.MontoPagado == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPagado:N2}")</strong></span>
+                    <span>Monto pendiente: <strong>@(Model.SeguimientoPagos.MontoPendiente == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPendiente:N2}")</strong></span>
+                }
+                else
+                {
+                    <span>Inscripcion gratuita: <strong>Si</strong></span>
+                }
             </div>
 
             <div class="table-responsive">
@@ -230,11 +259,14 @@
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="alumno">Alumno</button></th>
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="documento">Documento</button></th>
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="registro">Registro</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="estado">Estado</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="total">Total</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pagado">Pagado</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pendiente">Pendiente</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="cuotas">Cuotas</button></th>
+                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="estado">@(cursoTieneCobro ? "Estado" : "Estado de inscripcion")</button></th>
+                            @if (cursoTieneCobro)
+                            {
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="total">Total</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pagado">Pagado</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pendiente">Pendiente</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="cuotas">Cuotas</button></th>
+                            }
                             <th></th>
                         </tr>
                     </thead>
@@ -269,19 +301,25 @@
                                 <td>@alumno.NumeroDocumento</td>
                                 <td>@alumno.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td>
-                                    <span class="status-badge @(string.Equals(alumno.EstadoPagoGeneral, "PAGADO", StringComparison.OrdinalIgnoreCase) ? "available" : "used")">
-                                        @alumno.EstadoPagoGeneral
+                                    <span class="status-badge @(cursoTieneCobro && !string.Equals(alumno.EstadoPagoGeneral, "PAGADO", StringComparison.OrdinalIgnoreCase) ? "used" : "available")">
+                                        @(cursoTieneCobro ? alumno.EstadoPagoGeneral : "INSCRITO")
                                     </span>
                                 </td>
-                                <td>@(alumno.CostoFinal == 0m ? "--" : $"S/ {alumno.CostoFinal:N2}")</td>
-                                <td>@(alumno.MontoPagado == 0m ? "--" : $"S/ {alumno.MontoPagado:N2}")</td>
-                                <td>@(alumno.MontoPendiente == 0m ? "--" : $"S/ {alumno.MontoPendiente:N2}")</td>
-                                <td>@alumno.CuotasPagadas/@alumno.NumeroCuotas</td>
+                                @if (cursoTieneCobro)
+                                {
+                                    <td>@(alumno.CostoFinal == 0m ? "--" : $"S/ {alumno.CostoFinal:N2}")</td>
+                                    <td>@(alumno.MontoPagado == 0m ? "--" : $"S/ {alumno.MontoPagado:N2}")</td>
+                                    <td>@(alumno.MontoPendiente == 0m ? "--" : $"S/ {alumno.MontoPendiente:N2}")</td>
+                                    <td>@alumno.CuotasPagadas/@alumno.NumeroCuotas</td>
+                                }
                                 <td class="text-end">
                                     <div class="admin-row-actions">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary js-toggle-detail" data-target="@detalleId">
-                                            Mas detalle
-                                        </button>
+                                        @if (cursoTieneCobro)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-toggle-detail" data-target="@detalleId">
+                                                Mas detalle
+                                            </button>
+                                        }
                                         <form asp-action="EliminarInscripcion" method="post" class="d-inline js-confirm-form">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
@@ -289,13 +327,15 @@
                                             <button type="submit"
                                                     class="btn btn-sm btn-outline-danger"
                                                     data-confirm-title="Eliminar inscrito"
-                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos, su plan de cuotas y sus datos de seguimiento. Si uso código INSNSB, el código quedara disponible nuevamente.">
+                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos y sus datos de seguimiento. Si uso codigo INSNSB, el codigo quedara disponible nuevamente.">
                                                 Eliminar
                                             </button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
+                            @if (cursoTieneCobro)
+                            {
                             <tr id="@detalleId" class="payment-detail-row hidden-detail-row">
                                 <td colspan="9">
                                     <div class="payment-detail-box">
@@ -374,6 +414,7 @@
                                     </div>
                                 </td>
                             </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -558,3 +599,4 @@
         });
     </script>
 }
+

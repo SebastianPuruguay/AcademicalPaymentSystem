@@ -135,7 +135,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 return BadRequest(new { exito = false, mensaje = ObtenerPrimerErrorDeModelo() });
             }
 
-            var mensajeValidacion = ValidarFormulario(input);
+            var mensajeValidacion = ValidarFormulario(input, curso, costoFinalCalculado);
             if (!string.IsNullOrWhiteSpace(mensajeValidacion))
             {
                 return BadRequest(new { exito = false, mensaje = mensajeValidacion });
@@ -150,7 +150,10 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
 
                 var esInsnsb = string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase);
                 var costoFinal = costoFinalCalculado ?? PagoCursoHelper.CalcularCostoFinal(curso, esInsnsb);
-                var numeroCuotas = PagoCursoHelper.ResolverNumeroCuotas(curso, costoFinal, input.NumeroCuotas);
+                var requierePago = PagoCursoHelper.RequierePago(curso, costoFinal);
+                var numeroCuotas = requierePago
+                    ? PagoCursoHelper.ResolverNumeroCuotas(curso, costoFinal, input.NumeroCuotas)
+                    : 0;
 
                 input.CostoFinal = costoFinal;
                 input.NumeroCuotas = numeroCuotas;
@@ -183,12 +186,12 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 return Ok(new
                 {
                     exito = true,
-                    mensaje = costoFinal <= 0m
-                        ? $"Inscripcion exitosa en {resultado.NombreCurso}. No tienes deuda pendiente."
+                    mensaje = !requierePago
+                        ? $"Inscripcion exitosa en {resultado.NombreCurso}."
                         : $"Inscripcion registrada en {resultado.NombreCurso}. Te estamos redirigiendo al pago de la {(numeroCuotas > 1 ? "primera" : "unica")} cuota.",
                     idInscripcion = resultado.IdInscripcion,
-                    esCursoGratuito = costoFinal <= 0m,
-                    requierePago = costoFinal > 0m,
+                    esCursoGratuito = !requierePago,
+                    requierePago,
                     costoFinal,
                     numeroCuotas,
                     estadoPagoGeneral = PagoCursoHelper.CalcularEstadoGeneral(cronograma, costoFinal),
@@ -609,7 +612,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     ?? $"/InscripcionCIS/PagoDemo?token={Uri.EscapeDataString(tokenPagoPasarela)}";
         }
 
-        private string? ValidarFormulario(FormularioInscripcionCursoInput input)
+        private string? ValidarFormulario(FormularioInscripcionCursoInput input, CursoPagadoResumen? curso, decimal? costoFinalCalculado)
         {
             if (!input.AceptaTratamientoDatos)
             {
@@ -622,19 +625,26 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 return "El DNI debe tener exactamente 8 digitos.";
             }
 
-            if (string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase) &&
+            var esInsnsb = string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase);
+            var requiereCodigoInsnsb = esInsnsb &&
+                curso is not null &&
+                PagoCursoHelper.RequiereCodigoInsnsb(
+                    curso,
+                    costoFinalCalculado ?? PagoCursoHelper.CalcularCostoFinal(curso, esInsnsb: true));
+
+            if (requiereCodigoInsnsb &&
                 string.IsNullOrWhiteSpace(input.CodigoInsnsb))
             {
                 return "Para personal INSNSB debe ingresar un codigo unico valido.";
             }
 
-            if (string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase) &&
+            if (esInsnsb &&
                 string.IsNullOrWhiteSpace(input.CondicionLaboralInsnsb))
             {
                 return "Para personal INSNSB debe indicar si es Locador, Nombrado o CAS.";
             }
 
-            if (!string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase) &&
+            if (!esInsnsb &&
                 string.IsNullOrWhiteSpace(input.NombreInstitucion))
             {
                 return "Debe indicar el nombre de la institucion de procedencia.";

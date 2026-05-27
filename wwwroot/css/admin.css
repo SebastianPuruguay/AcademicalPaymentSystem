@@ -251,13 +251,38 @@ body {
     border: 1px solid rgba(13, 13, 13, 0.07);
 }
 
-.report-metric-card span {
+.report-metric-card > span {
     display: block;
     color: #5a6169;
     font-size: 0.85rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+}
+
+.report-help-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin-left: 0.35rem;
+    border-radius: 999px;
+    background: rgba(73, 136, 191, 0.14);
+    color: #254e71;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: help;
+}
+
+.report-help-tip:hover,
+.report-help-tip:focus {
+    background: var(--admin-blue);
+    color: #fff;
+    outline: none;
 }
 
 .report-metric-card strong {

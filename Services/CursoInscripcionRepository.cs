@@ -156,8 +156,12 @@ SELECT @@ROWCOUNT;",
                     };
                 }
 
+                var costoFinal = input.CostoFinal ?? PagoCursoHelper.CalcularCostoFinal(curso, EsInstitucionInsnsb(input.TipoInstitucion));
+                var requiereCodigoInsnsb = EsInstitucionInsnsb(input.TipoInstitucion)
+                    && PagoCursoHelper.RequiereCodigoInsnsb(curso, costoFinal);
+
                 long? codigoId = null;
-                if (EsInstitucionInsnsb(input.TipoInstitucion))
+                if (requiereCodigoInsnsb)
                 {
                     codigoId = await ObtenerCodigoDisponibleAsync(
                         input.CursoId,
@@ -191,7 +195,6 @@ SELECT @@ROWCOUNT;",
 
                 await transaction.CommitAsync();
 
-                var costoFinal = input.CostoFinal ?? 0m;
                 return new ResultadoRegistroInscripcion
                 {
                     Exito = true,
@@ -201,7 +204,7 @@ SELECT @@ROWCOUNT;",
                     CostoFinal = costoFinal,
                     NumeroCuotas = input.NumeroCuotas ?? 0,
                     EstadoPagoGeneral = cuotas.Count == 0 ? "PAGADO" : "PENDIENTE",
-                    RequierePago = costoFinal > 0m
+                    RequierePago = PagoCursoHelper.RequierePago(curso, costoFinal)
                 };
             }
             catch (Exception ex)
@@ -500,7 +503,7 @@ SELECT @@ROWCOUNT;",
             await using var connection = CreateConnection();
             await connection.OpenAsync();
 
-            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_curso", connection);
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_curso_20260521", connection);
             command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -565,7 +568,7 @@ SELECT @@ROWCOUNT;",
             await using var connection = CreateConnection();
             await connection.OpenAsync();
 
-            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_general", connection);
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_general_20260521", connection);
             command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
 
             var items = new List<ReporteInscritoGeneralItem>();
@@ -1043,13 +1046,11 @@ END;",
             const string EsPagadoActual = @"
 (
     UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'SI'
-    OR (
-        tc.se_cobra IS NULL
-        AND (
-            ISNULL(tc.costo_base, 0) > 0
-            OR ISNULL(tc.costo_personal_insnsb, 0) > 0
-        )
-    )
+)";
+
+            const string TieneSeCobraConfigurado = @"
+(
+    UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) IN ('SI', 'NO')
 )";
 
             const string TieneTarifasHistoricas = @"
@@ -1079,8 +1080,7 @@ EXISTS (
 CASE
     WHEN UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'SI' THEN 'Si'
     WHEN UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'NO' THEN 'No'
-    WHEN ISNULL(tc.costo_base, 0) > 0 OR ISNULL(tc.costo_personal_insnsb, 0) > 0 THEN 'Si'
-    ELSE 'No'
+    ELSE NULL
 END";
 
             var visibleExpr = tieneVisibleEnFormulario
@@ -1105,24 +1105,31 @@ CASE
 END";
 
             var condicionWhere = soloPublicos
-                ? EsPagadoActual
-                : $@"
+                ? (tieneVisibleEnFormulario
+                    ? @"
 (
-    {EsPagadoActual}
-    OR {TieneTarifasHistoricas}
-    OR {TieneMovimientosPagados}
-    OR {TieneCronogramaPagos}
-    {(tieneFuePagadoHistorico ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.fue_pagado_historico, '')))) = 'SI'" : string.Empty)}
-)";
-
-            if (soloPublicos && tieneVisibleEnFormulario)
-            {
-                condicionWhere += @"
-AND (
+    UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) IN ('SI', 'NO')
+    AND
+    (
     tc.visible_en_formulario IS NULL
     OR UPPER(LTRIM(RTRIM(tc.visible_en_formulario))) = 'SI'
+    )
+)"
+                    : TieneSeCobraConfigurado)
+                : $@"
+(
+    {TieneSeCobraConfigurado}
+    AND
+    (
+        {EsPagadoActual}
+        OR UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'NO'
+        OR {TieneTarifasHistoricas}
+        OR {TieneMovimientosPagados}
+        OR {TieneCronogramaPagos}
+        {(tieneVisibleEnFormulario ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.visible_en_formulario, '')))) = 'SI'" : string.Empty)}
+        {(tieneFuePagadoHistorico ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.fue_pagado_historico, '')))) = 'SI'" : string.Empty)}
+    )
 )";
-            }
 
             if (filtrarPorCursoId)
             {

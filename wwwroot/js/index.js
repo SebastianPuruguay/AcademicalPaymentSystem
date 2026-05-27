@@ -302,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const otherMediaInput = document.getElementById('otroMedioComunicacion');
     const dataPolicyInput = document.getElementById('aceptaTratamientoDatos');
     const internalCost = document.getElementById('courseInternalCost');
+    const paymentSummaryCards = document.querySelectorAll('.js-payment-summary-card');
 
     let cronogramaActual = [];
 
@@ -467,13 +468,49 @@ document.addEventListener('DOMContentLoaded', () => {
             .sort((left, right) => left - right);
     };
 
-    const calculateFinalCost = () => {
-        const isInsnsb = institutionTypeInput.value === 'INSNSB';
-        if (isInsnsb) {
-            return Number(selectedCourse.costoPersonalInsnsb ?? selectedCourse.costoBase ?? 0);
+    const parseMoneyValue = value => {
+        if (value === null || value === undefined || value === '') {
+            return null;
         }
 
-        return Number(selectedCourse.costoBase ?? 0);
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getBaseCost = () => parseMoneyValue(selectedCourse.costoBase) ?? 0;
+
+    const getInsnsbCost = () => parseMoneyValue(selectedCourse.costoPersonalInsnsb) ?? getBaseCost();
+
+    const courseHasChargeLogic = () => String(selectedCourse.seCobra || '').trim().toUpperCase() === 'SI';
+
+    const calculateFinalCost = () => {
+        if (!courseHasChargeLogic()) {
+            return 0;
+        }
+
+        const isInsnsb = institutionTypeInput.value === 'INSNSB';
+        if (isInsnsb) {
+            return getInsnsbCost();
+        }
+
+        return getBaseCost();
+    };
+
+    const roundMoneyToCents = value => Math.round((value || 0) * 100);
+
+    const requiresInsnsbCode = () => {
+        if (institutionTypeInput.value !== 'INSNSB') {
+            return false;
+        }
+
+        const finalCost = calculateFinalCost();
+        if (finalCost <= 0) {
+            return false;
+        }
+
+        const baseCost = roundMoneyToCents(getBaseCost());
+        const insnsbCost = roundMoneyToCents(getInsnsbCost());
+        return baseCost !== insnsbCost;
     };
 
     const getAllowedInstallmentOptions = () => {
@@ -585,14 +622,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshPaymentSummary = () => {
         const finalCost = calculateFinalCost();
         const allowedInstallments = getAllowedInstallmentOptions();
-        const requiresPayment = finalCost > 0;
+        const requiresPayment = courseHasChargeLogic() && finalCost > 0;
+
+        paymentSummaryCards.forEach(card => {
+            card.classList.toggle('hidden-field', !requiresPayment);
+        });
 
         if (internalCost) {
             internalCost.textContent = `Comunicarse al ${courseContactPhone}`;
         }
 
         if (insnsbCodeHelperText) {
-            insnsbCodeHelperText.textContent = `Este codigo es para trabajadores INSNSB, comunicarse al numero ${courseContactPhone} o acercarse a DOCENCIA.`;
+            insnsbCodeHelperText.textContent = requiresInsnsbCode()
+                ? `Este codigo es para trabajadores INSNSB, comunicarse al numero ${courseContactPhone} o acercarse a DOCENCIA.`
+                : 'Para esta actividad no se requiere codigo INSNSB porque no hay tarifa diferenciada.';
         }
 
         if (!requiresPayment) {
@@ -603,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        submitButton.textContent = 'Continuar al plan de pagos';
+        submitButton.textContent = 'Continuar inscripción';
         paymentFinalCost.textContent = formatMoney(finalCost, '--');
         paymentMaxInstallments.textContent = allowedInstallments.map(String).join(' o ');
         paymentPlanIntro.textContent = `El costo final es ${formatMoney(finalCost, '--')}. Elige una de estas opciones de cuotas: ${allowedInstallments.map(String).join(' o ')}. Revisa las fechas limite de pago por cuota.`;
@@ -771,18 +814,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateInstitutionFields = () => {
         const institutionType = institutionTypeInput.value;
         const isInsnsb = institutionType === 'INSNSB';
+        const shouldRequestInsnsbCode = requiresInsnsbCode();
 
         ipressContainer.classList.toggle('hidden-field', institutionType !== 'IPRESS');
         universityContainer.classList.toggle('hidden-field', institutionType !== 'UNIVERSIDAD');
         otherInstitutionContainer.classList.toggle('hidden-field', institutionType !== 'OTRA');
         insnsbConditionGroup.classList.toggle('hidden-field', !isInsnsb);
-        insnsbCodeGroup.classList.toggle('hidden-field', !isInsnsb);
+        insnsbCodeGroup.classList.toggle('hidden-field', !shouldRequestInsnsbCode);
 
         ipressInput.required = institutionType === 'IPRESS';
         universityInput.required = institutionType === 'UNIVERSIDAD';
         otherInstitutionInput.required = institutionType === 'OTRA';
         insnsbConditionInput.required = isInsnsb;
-        insnsbCodeInput.required = isInsnsb;
+        insnsbCodeInput.required = shouldRequestInsnsbCode;
 
         if (institutionType !== 'IPRESS') {
             ipressInput.value = '';
@@ -795,6 +839,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!isInsnsb) {
             insnsbConditionInput.value = '';
+        }
+        if (!shouldRequestInsnsbCode) {
             insnsbCodeInput.value = '';
         }
 
@@ -876,7 +922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         successTrackingLink.href = data.seguimientoUrl || appConfig.seguimientoUrl || '#';
         successTrackingLink.textContent = data.requierePago
             ? 'Si ya pagaste o deseas revisarlo despues, ir a seguimiento'
-            : 'Ir a seguimiento de inscripciones y plan de pagos';
+            : 'Ir a seguimiento de inscripciones';
 
         if (successPrimaryLink) {
             if (data.requierePago && data.pagoRedirectUrl) {
@@ -909,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const payload = Object.fromEntries(new FormData(form).entries());
         const finalCost = calculateFinalCost();
-        const requiresPayment = finalCost > 0;
+        const requiresPayment = courseHasChargeLogic() && finalCost > 0;
 
         payload.CursoId = Number(appConfig.selectedCourseId ?? selectedCourse.idActividad ?? 0);
         payload.AceptaTratamientoDatos = dataPolicyInput.checked;
@@ -1018,7 +1064,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const finalCost = calculateFinalCost();
-        if (finalCost > 0) {
+        if (courseHasChargeLogic() && finalCost > 0) {
             showPaymentPlan();
             return;
         }
