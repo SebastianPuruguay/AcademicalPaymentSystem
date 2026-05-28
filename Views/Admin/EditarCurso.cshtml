@@ -207,6 +207,15 @@
                                 <small class="admin-field-help">Recomendado: Si, para evitar registros duplicados del mismo alumno.</small>
                                 <span asp-validation-for="ConfiguracionCurso.RestriccionInscripcionUnica" class="text-danger"></span>
                             </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="form-label">Preguntar asistencia presencial al primer dia</label>
+                                <select asp-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="form-select">
+                                    <option value="No">No</option>
+                                    <option value="Si">Si</option>
+                                </select>
+                                <small class="admin-field-help">Usalo cuando se necesite confirmar si el alumno asistira presencialmente al inicio del curso.</small>
+                                <span asp-validation-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="text-danger"></span>
+                            </div>
                         </div>
 
                         <div class="admin-form-actions">

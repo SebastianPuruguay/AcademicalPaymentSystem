@@ -13,6 +13,7 @@
     }
 
     var mostrarSinCobro = Model.Detalle?.SinCobro > 0;
+    var cursoPreguntaPresencialidad = Model.Detalle?.SolicitaConfirmacionPresencialPrimerDia == true;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -129,6 +130,18 @@
                         <strong>@Model.Detalle.SinCobro</strong>
                     </div>
                 }
+                @if (cursoPreguntaPresencialidad)
+                {
+                    <div class="report-metric-card">
+                        <span>Asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que confirmaron asistencia presencial al primer dia de clases.">?</span></span>
+                        <strong>@Model.Detalle.AsistiranPresencialPrimerDia</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>No asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que indicaron que no asistiran presencialmente al primer dia de clases.">?</span></span>
+                        <strong>@Model.Detalle.NoAsistiranPresencialPrimerDia</strong>
+                    </div>
+
+                }
                 <div class="report-metric-card">
                     <span>Monto pagado (Inscritos) <span class="report-help-tip" tabindex="0" title="Suma del dinero efectivamente pagado por los inscritos visibles segun los filtros aplicados.">?</span></span>
                     <strong>@Money(Model.Detalle.MontoPagadoTotal)</strong>
@@ -162,6 +175,10 @@
                                 <th>Celular</th>
                                 <th>Correo</th>
                                 <th>Institucion de procedencia</th>
+                                @if (cursoPreguntaPresencialidad)
+                                {
+                                    <th>Asistencia presencial primer dia</th>
+                                }
                                 <th>Registro</th>
                                 <th>Ultimo pago</th>
                                 <th>Estado reporte</th>
@@ -179,6 +196,10 @@
                                     <td>@(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)</td>
                                     <td>@(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)</td>
                                     <td>@(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)</td>
+                                    @if (cursoPreguntaPresencialidad)
+                                    {
+                                        <td>@item.AsistiraPresencialPrimerDiaEtiqueta</td>
+                                    }
                                     <td>@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
                                     <td><span class="report-status-pill report-status-@item.EstadoReportePago.ToLowerInvariant()">@item.EstadoReportePagoEtiqueta</span></td>

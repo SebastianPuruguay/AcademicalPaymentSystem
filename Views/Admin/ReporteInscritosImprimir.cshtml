@@ -68,6 +68,12 @@
             }
             <div><span>Internos INSNSB</span><strong>@resumen.Internos</strong></div>
             <div><span>Externos</span><strong>@resumen.Externos</strong></div>
+            @if (resumen.SolicitaConfirmacionPresencialPrimerDia)
+            {
+                <div><span>Asistiran presencialmente</span><strong>@resumen.AsistiranPresencialPrimerDia</strong></div>
+                <div><span>No asistiran presencialmente</span><strong>@resumen.NoAsistiranPresencialPrimerDia</strong></div>
+                
+            }
             @if (cursoTieneCobro)
             {
                 <div><span>Pagado</span><strong>@resumen.Pagados</strong></div>

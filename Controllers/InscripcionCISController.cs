@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using CURSO_INTERCULTURALIDAD.Models;
 using CURSO_INTERCULTURALIDAD.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -109,8 +110,27 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Registrar([FromBody] FormularioInscripcionCursoInput input)
+        public async Task<IActionResult> Registrar()
         {
+            var lectura = await LeerInputRegistroAsync();
+            var input = lectura.Input;
+
+            if (input is null)
+            {
+                _logger.LogWarning(
+                    "Registro de inscripcion sin datos validos. Motivo: {Motivo}. ContentType: {ContentType}. ContentLength: {ContentLength}. BodyPreview: {BodyPreview}",
+                    lectura.Motivo,
+                    Request.ContentType,
+                    Request.ContentLength,
+                    lectura.BodyPreview);
+
+                return BadRequest(new
+                {
+                    exito = false,
+                    mensaje = $"No se recibieron los datos de inscripcion ({lectura.Motivo}). Actualice la pagina e intente nuevamente."
+                });
+            }
+
             CursoPagadoResumen? curso = null;
             decimal? costoFinalCalculado = null;
 
@@ -130,6 +150,9 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 }
             }
 
+            ModelState.Clear();
+            TryValidateModel(input);
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(new { exito = false, mensaje = ObtenerPrimerErrorDeModelo() });
@@ -145,7 +168,11 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             {
                 if (curso is null)
                 {
-                    return BadRequest(new { exito = false, mensaje = "El curso seleccionado no esta disponible." });
+                    return BadRequest(new
+                    {
+                        exito = false,
+                        mensaje = $"El curso seleccionado ({input.CursoId}) no esta disponible para inscripcion. Verifique que tenga se_cobra configurado como Si o No y que este visible en formulario."
+                    });
                 }
 
                 var esInsnsb = string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase);
@@ -215,9 +242,87 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 return StatusCode(500, new
                 {
                     exito = false,
-                    mensaje = "Ocurrio un error al registrar la inscripcion. Verifique la conexion con la base de datos."
+                    mensaje = "Recuerda que la inscripción es única por DNI/Correo electrónico. Si ya te inscribiste y quieres realizar un pago pendiente, ingresa a Seguimiento con tu DNI y correo registrado para continuar el proceso de pago."
                 });
             }
+        }
+
+        private async Task<LecturaRegistroInput> LeerInputRegistroAsync()
+        {
+            if (Request.HasFormContentType)
+            {
+                var form = Request.Form;
+                if (form.Count == 0)
+                {
+                    return new LecturaRegistroInput(null, "formulario sin campos", string.Empty);
+                }
+
+                return new LecturaRegistroInput(ConstruirInputDesdeFormulario(form), "formulario recibido", string.Empty);
+            }
+
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+
+            using var reader = new StreamReader(Request.Body, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+            var rawBody = await reader.ReadToEndAsync();
+            Request.Body.Position = 0;
+
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                return new LecturaRegistroInput(null, "body vacio", string.Empty);
+            }
+
+            try
+            {
+                var input = JsonSerializer.Deserialize<FormularioInscripcionCursoInput>(
+                    rawBody,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                return input is null
+                    ? new LecturaRegistroInput(null, "json sin datos", RecortarDiagnostico(rawBody))
+                    : new LecturaRegistroInput(input, "json recibido", string.Empty);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "No se pudo deserializar el registro de inscripcion.");
+                return new LecturaRegistroInput(null, "json invalido", RecortarDiagnostico(rawBody));
+            }
+        }
+
+        private sealed record LecturaRegistroInput(FormularioInscripcionCursoInput? Input, string Motivo, string BodyPreview);
+
+        private static FormularioInscripcionCursoInput ConstruirInputDesdeFormulario(IFormCollection form)
+        {
+            return new FormularioInscripcionCursoInput
+            {
+                CursoId = TryLong(form["CursoId"].ToString(), out var cursoId) ? cursoId : 0,
+                TipoDocumento = form["TipoDocumento"].ToString(),
+                NumeroDocumento = form["NumeroDocumento"].ToString(),
+                Nombres = form["Nombres"].ToString(),
+                Apellidos = form["Apellidos"].ToString(),
+                Correo = form["Correo"].ToString(),
+                Celular = form["Celular"].ToString(),
+                CodigoPais = string.IsNullOrWhiteSpace(form["CodigoPais"].ToString()) ? "+51" : form["CodigoPais"].ToString(),
+                Pais = string.IsNullOrWhiteSpace(form["Pais"].ToString()) ? "PERU" : form["Pais"].ToString(),
+                Region = EmptyToNull(form["Region"].ToString()),
+                Profesion = form["Profesion"].ToString(),
+                Especialidad = EmptyToNull(form["Especialidad"].ToString()),
+                TipoInstitucion = form["TipoInstitucion"].ToString(),
+                NombreInstitucion = EmptyToNull(form["NombreInstitucion"].ToString()),
+                MedioComunicacion = form["MedioComunicacion"].ToString(),
+                OtroMedioComunicacion = EmptyToNull(form["OtroMedioComunicacion"].ToString()),
+                CodigoInsnsb = EmptyToNull(form["CodigoInsnsb"].ToString()),
+                CondicionLaboralInsnsb = EmptyToNull(form["CondicionLaboralInsnsb"].ToString()),
+                CostoFinal = TryDecimal(form["CostoFinal"].ToString(), out var costoFinal) ? costoFinal : null,
+                NumeroCuotas = TryInt(form["NumeroCuotas"].ToString(), out var numeroCuotas) ? numeroCuotas : null,
+                AceptaTratamientoDatos = ParseBool(form["AceptaTratamientoDatos"].ToString()),
+                AsistiraPresencialPrimerDia = string.IsNullOrWhiteSpace(form["AsistiraPresencialPrimerDia"].ToString())
+                    ? null
+                    : ParseBool(form["AsistiraPresencialPrimerDia"].ToString())
+            };
         }
 
         [HttpPost]
@@ -356,6 +461,26 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 {
                     return Redirect(pago.UrlPagoIzipay);
                 }
+            }
+
+            var reserva = await _cursoRepository.ReservarCreacionPagoIzipayAsync(token);
+            pago = reserva.Pago ?? pago;
+
+            if (pago.IdPagoIzipay.HasValue && !string.IsNullOrWhiteSpace(pago.UrlPagoIzipay))
+            {
+                return Redirect(pago.UrlPagoIzipay);
+            }
+
+            if (reserva.EnProceso)
+            {
+                TempData["PagoDemoError"] = "Estamos generando tu enlace de pago. Espera unos segundos y vuelve a intentarlo para evitar crear una boleta duplicada.";
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
+            }
+
+            if (!reserva.ReservadoParaCrear)
+            {
+                TempData["PagoDemoError"] = "No se pudo reservar la cuota para generar el enlace de pago. Actualiza la pagina e intenta nuevamente.";
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
             }
 
             var resultado = await _pagoIzipayService.CrearPagoAsync(pago, cancellationToken);
@@ -625,6 +750,11 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 return "El DNI debe tener exactamente 8 digitos.";
             }
 
+            if (curso?.SolicitaConfirmacionPresencialPrimerDia == true && !input.AsistiraPresencialPrimerDia.HasValue)
+            {
+                return "Debe confirmar si contara con asistencia presencial al primer dia de clases.";
+            }
+
             var esInsnsb = string.Equals(input.TipoInstitucion, "INSNSB", StringComparison.OrdinalIgnoreCase);
             var requiereCodigoInsnsb = esInsnsb &&
                 curso is not null &&
@@ -686,6 +816,47 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         private static string NormalizarCorreo(string? correo)
         {
             return (correo ?? string.Empty).Trim().ToLowerInvariant();
+        }
+
+        private static string? EmptyToNull(string? value)
+        {
+            var normalized = value?.Trim();
+            return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
+        }
+
+        private static bool ParseBool(string? value)
+        {
+            return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "on", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "Si", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryLong(string? value, out long result)
+        {
+            return long.TryParse(value, out result);
+        }
+
+        private static bool TryInt(string? value, out int result)
+        {
+            return int.TryParse(value, out result);
+        }
+
+        private static bool TryDecimal(string? value, out decimal result)
+        {
+            return decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out result)
+                || decimal.TryParse(value, out result);
+        }
+
+        private static string RecortarDiagnostico(string? value)
+        {
+            var normalized = value?.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return string.Empty;
+            }
+
+            return normalized.Length <= 500 ? normalized : normalized[..500];
         }
 
         private static string NormalizarSeleccion(string? value)

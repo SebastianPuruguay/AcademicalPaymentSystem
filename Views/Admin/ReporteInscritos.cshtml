@@ -115,6 +115,18 @@
                     <span>Externos <span class="report-help-tip" tabindex="0" title="Registros de participantes cuya institucion no corresponde al INSNSB.">?</span></span>
                     <strong>@resumen.Externos</strong>
                 </div>
+                @if (resumen.SolicitaConfirmacionPresencialPrimerDia)
+                {
+                    <div class="report-metric-card">
+                        <span>Asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que confirmaron asistencia presencial al primer dia de clases.">?</span></span>
+                        <strong>@resumen.AsistiranPresencialPrimerDia</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>No asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que indicaron que no asistiran presencialmente al primer dia.">?</span></span>
+                        <strong>@resumen.NoAsistiranPresencialPrimerDia</strong>
+                    </div>
+
+                }
                 @if (cursoTieneCobro)
                 {
                     <div class="report-metric-card">

@@ -180,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, {});
 
     const profesiones = sortAlpha([
-        'ADMINISTRACION DE EMPRESAS', 'ADMINISTRACION EN TURISMO', 'AGRONOMIA', 'ANALISIS DE DATOS', 'ANTROPOLOGIA', 'ARQUITECTURA',
+        'ADMINISTRACION DE EMPRESAS', 'ADMINISTRACION EN TURISMO', 'ADMINISTRACION EN SALUD','AGRONOMIA', 'ANALISIS DE DATOS', 'ANTROPOLOGIA', 'ARQUITECTURA',
         'ARTE Y DISENO GRAFICO', 'BIOLOGIA', 'BIOTECNOLOGIA', 'BIBLIOTECOLOGIA Y CIENCIAS DE LA INFORMACION', 'CIENCIAS DE LA COMPUTACION',
         'CIENCIAS DE LA COMUNICACION', 'CIENCIAS DEL DEPORTE', 'CIENCIAS POLITICAS', 'CINE Y TELEVISION', 'COMUNICACION SOCIAL',
         'CONTABILIDAD', 'DANZA', 'DERECHO', 'DISENO DE INTERIORES', 'DISENO DE MODA', 'DISENO DE PRODUCTOS', 'ECONOMIA',
@@ -192,14 +192,14 @@ document.addEventListener('DOMContentLoaded', () => {
         'INGENIERIA MECATRONICA', 'INGENIERIA METALURGICA', 'INGENIERIA QUIMICA', 'INGENIERIA TEXTIL', 'LABORATORIO CLINICO',
         'LITERATURA', 'LINGUISTICA', 'MARKETING', 'MATEMATICAS', 'MATEMATICAS APLICADAS', 'MEDICINA HUMANA',
         'MEDICINA VETERINARIA', 'MUSICA', 'NUTRICION Y DIETETICA', 'OBSTETRICIA', 'ODONTOLOGIA', 'OPTOMETRIA', 'PSICOLOGIA',
-        'PUBLICIDAD', 'QUIMICA', 'RELACIONES INTERNACIONALES', 'SOCIOLOGIA', 'TEATRO', 'TECNICO EN ADMINISTRACION',
+        'PUBLICIDAD', 'QUIMICA', 'RELACIONES INTERNACIONALES', 'SOCIOLOGIA', 'TEATRO', 'TECNICO EN ADMINISTRACION', 'TECNOLOGO MEDICO',
         'TECNICO EN COMERCIO EXTERIOR', 'TECNICO EN COMPUTACION E INFORMATICA', 'TECNICO EN CONTABILIDAD', 'TECNICO EN ELECTRICIDAD',
         'TECNICO EN ELECTRONICA INDUSTRIAL', 'TECNICO EN ENFERMERIA', 'TECNICO EN FARMACIA', 'TECNICO EN FISIOTERAPIA',
-        'TECNICO EN GASTRONOMIA', 'TECNICO EN HOTELERIA Y TURISMO', 'TECNICO EN INSTRUMENTACION QUIRURGICA',
+        'TECNICO EN GASTRONOMIA', 'TECNICO EN HOTELERIA Y TURISMO', 'TECNICO EN INSTRUMENTACION QUIRURGICA','TECNICO EN RADIOLOGIA E IMAGENOLOGIA',
         'TECNICO EN LABORATORIO CLINICO', 'TECNICO EN LOGISTICA', 'TECNICO EN MARKETING', 'TECNICO EN MECANICA AUTOMOTRIZ',
         'TECNICO EN OPTOMETRIA', 'TECNICO EN RADIOLOGIA', 'TECNICO EN TELECOMUNICACIONES', 'TERAPIA FISICA Y REHABILITACION',
         'TERAPIA OCUPACIONAL', 'TRABAJO SOCIAL', 'TRADUCCION E INTERPRETACION', 'TURISMO Y HOTELERIA', 'ZOOTECNIA',
-        'NO PROFESIONAL/ ESTUDIANTE'
+        'NO PROFESIONAL/ ESTUDIANTE', 'OTROS',
     ]);
 
     const especialidadesMedicina = sortAlpha([
@@ -222,6 +222,16 @@ document.addEventListener('DOMContentLoaded', () => {
         'ENFERMERIA DE CUIDADOS PALIATIVOS', 'ENFERMERIA INTENSIVA', 'ENFERMERIA ONCOLOGICA', 'ENFERMERIA DE URGENCIAS',
         'ENFERMERIA FAMILIAR Y COMUNITARIA', 'ENFERMERIA ADMINISTRATIVA Y DE GESTION', 'ENFERMERIA CENTRO QUIRURGICO',
     ]);
+    const especialidadesTecnologoMedico = sortAlpha([
+        'TECNOLOGO MEDICO EN RADIOLOGIA',
+        'TECNOLOGO MEDICO EN LABORATORIO CLINICO Y ANATOMIA PATOLOGICA',
+        'TECNOLOGO MEDICO EN TERAPIA FISICA Y REHABILITACION',
+        'TECNOLOGO MEDICO EN TERAPIA DE LENGUAJE',
+        'TECNOLOGO MEDICO EN OPTOMETRIA',
+        'TECNOLOGO MEDICO EN TERAPIA OCUPACIONAL',
+        'TECNOLOGO MEDICO EN AUDIOLOGIA',
+        'TECNOLOGO MEDICO EN IMAGENOLOGIA',
+    ]);
 
     const appConfig = window.inscripcionApp || {};
     const selectedCourseRaw = document.getElementById('selectedCourseData')?.textContent?.trim() || 'null';
@@ -236,11 +246,92 @@ document.addEventListener('DOMContentLoaded', () => {
         const continueButton = selectionForm.querySelector('button[type="submit"]');
 
         if (courseSelect && continueButton) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'searchable-select';
+            const input = document.createElement('input');
+            input.type = 'search';
+            input.className = 'searchable-select-input';
+            input.autocomplete = 'off';
+            input.placeholder = courseSelect.dataset.searchPlaceholder || 'Buscar...';
+            const results = document.createElement('div');
+            results.className = 'searchable-select-results';
+            results.hidden = true;
+
+            courseSelect.parentNode.insertBefore(wrapper, courseSelect);
+            wrapper.appendChild(input);
+            wrapper.appendChild(courseSelect);
+            wrapper.appendChild(results);
+
+            const normalize = value => (value || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+
+            const refreshInput = () => {
+                const selectedOption = courseSelect.options[courseSelect.selectedIndex];
+                input.value = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : '';
+            };
+
+            const renderOptions = () => {
+                const query = normalize(input.value);
+                const matches = Array.from(courseSelect.options)
+                    .filter(option => option.value)
+                    .filter(option => !query || normalize(option.textContent).includes(query));
+
+                results.innerHTML = '';
+                if (matches.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'searchable-select-empty';
+                    empty.textContent = 'No se encontraron cursos.';
+                    results.appendChild(empty);
+                    results.hidden = false;
+                    return;
+                }
+
+                matches.forEach(option => {
+                    const item = document.createElement('div');
+                    item.className = 'searchable-select-option';
+                    item.tabIndex = 0;
+                    item.textContent = option.textContent;
+                    const selectItem = () => {
+                        courseSelect.value = option.value;
+                        refreshInput();
+                        results.hidden = true;
+                        courseSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    item.addEventListener('mousedown', event => event.preventDefault());
+                    item.addEventListener('click', selectItem);
+                    item.addEventListener('keydown', event => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            selectItem();
+                        }
+                    });
+                    results.appendChild(item);
+                });
+                results.hidden = false;
+            };
+
             const syncSelection = () => {
                 continueButton.disabled = !courseSelect.value;
             };
 
+            input.addEventListener('input', () => {
+                courseSelect.value = '';
+                syncSelection();
+                renderOptions();
+            });
+            input.addEventListener('focus', renderOptions);
+            input.addEventListener('blur', () => {
+                window.setTimeout(() => {
+                    results.hidden = true;
+                    refreshInput();
+                }, 120);
+            });
             syncSelection();
+            refreshInput();
             courseSelect.addEventListener('change', syncSelection);
         }
 
@@ -320,6 +411,124 @@ document.addEventListener('DOMContentLoaded', () => {
         const digits = String(value || '').replace(/\D/g, '').slice(0, 5);
         return digits ? `+${digits}` : '';
     };
+    const searchableSelects = new WeakMap();
+
+    const normalizeSearchText = value => (value || '')
+        .toString()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const refreshSearchableSelect = selectElement => {
+        const state = searchableSelects.get(selectElement);
+        if (!state) {
+            return;
+        }
+
+        const selectedOption = selectElement.options[selectElement.selectedIndex];
+        state.input.value = selectedOption && selectedOption.value ? selectedOption.textContent.trim() : '';
+    };
+
+    const renderSearchableOptions = selectElement => {
+        const state = searchableSelects.get(selectElement);
+        if (!state) {
+            return;
+        }
+
+        const query = normalizeSearchText(state.input.value);
+        const matches = Array.from(selectElement.options)
+            .filter(option => option.value)
+            .filter(option => !query || normalizeSearchText(option.textContent).includes(query));
+
+        state.results.innerHTML = '';
+
+        if (matches.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'searchable-select-empty';
+            empty.textContent = 'No se encontraron opciones.';
+            state.results.appendChild(empty);
+            state.results.hidden = false;
+            return;
+        }
+
+        matches.forEach(option => {
+            const optionRow = document.createElement('div');
+            optionRow.className = 'searchable-select-option';
+            optionRow.setAttribute('role', 'option');
+            optionRow.tabIndex = 0;
+            optionRow.textContent = option.textContent;
+            optionRow.addEventListener('mousedown', event => event.preventDefault());
+            const selectOption = () => {
+                selectElement.value = option.value;
+                refreshSearchableSelect(selectElement);
+                state.results.hidden = true;
+                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            optionRow.addEventListener('click', selectOption);
+            optionRow.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    selectOption();
+                }
+            });
+            state.results.appendChild(optionRow);
+        });
+
+        state.results.hidden = false;
+    };
+
+    const enhanceSearchableSelect = selectElement => {
+        if (!selectElement || searchableSelects.has(selectElement)) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'searchable-select';
+
+        const input = document.createElement('input');
+        input.type = 'search';
+        input.className = 'searchable-select-input';
+        input.autocomplete = 'off';
+        input.placeholder = selectElement.dataset.searchPlaceholder || 'Buscar...';
+
+        const results = document.createElement('div');
+        results.className = 'searchable-select-results';
+        results.hidden = true;
+
+        selectElement.parentNode.insertBefore(wrapper, selectElement);
+        wrapper.appendChild(input);
+        wrapper.appendChild(selectElement);
+        wrapper.appendChild(results);
+
+        searchableSelects.set(selectElement, { input, results });
+
+        input.addEventListener('input', () => {
+            selectElement.value = '';
+            renderSearchableOptions(selectElement);
+        });
+        input.addEventListener('focus', () => renderSearchableOptions(selectElement));
+        input.addEventListener('blur', () => {
+            const exact = Array.from(selectElement.options)
+                .find(option => option.value && normalizeSearchText(option.textContent) === normalizeSearchText(input.value));
+            if (exact) {
+                selectElement.value = exact.value;
+                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            refreshSearchableSelect(selectElement);
+            window.setTimeout(() => {
+                results.hidden = true;
+            }, 120);
+        });
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                results.hidden = true;
+                input.blur();
+            }
+        });
+        selectElement.addEventListener('change', () => refreshSearchableSelect(selectElement));
+        refreshSearchableSelect(selectElement);
+    };
 
     const populateSelect = (selectElement, items, placeholder = 'Seleccione...') => {
         if (!selectElement) {
@@ -339,6 +548,8 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = item;
             selectElement.appendChild(option);
         });
+
+        refreshSearchableSelect(selectElement);
     };
 
     const setCountryCodeValue = (code, countryKey = '') => {
@@ -351,11 +562,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 .find(option => option.dataset.country === countryKey && option.value === code);
             if (exactOption) {
                 exactOption.selected = true;
+                refreshSearchableSelect(countryCodeInput);
                 return;
             }
         }
 
         countryCodeInput.value = code;
+        refreshSearchableSelect(countryCodeInput);
     };
 
     const populateCountryCodeSelect = () => {
@@ -381,6 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setCountryCodeValue('+51', 'PERU');
         countryCodeInput.dataset.autoSynced = 'true';
+        refreshSearchableSelect(countryCodeInput);
     };
 
     const formatMoney = (value, fallback = 'Por confirmar') => {
@@ -665,6 +879,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             installmentsInput.appendChild(option);
         });
+        refreshSearchableSelect(installmentsInput);
 
         cronogramaActual = buildInstallmentSchedule(finalCost, Number(installmentsInput.value));
         renderScheduleTable(cronogramaActual);
@@ -722,6 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             regionPeruInput.value = '';
         }
+        refreshSearchableSelect(regionPeruInput);
 
         syncRegionValue();
     };
@@ -769,6 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isRestrictedDiplomado()) {
             populateSelect(specialtyInput, [restrictedDiplomadoSpecialty]);
             specialtyInput.value = restrictedDiplomadoSpecialty;
+            refreshSearchableSelect(specialtyInput);
             specialtyInput.required = true;
             specialtyContainer.classList.remove('hidden-field');
             return;
@@ -787,7 +1004,12 @@ document.addEventListener('DOMContentLoaded', () => {
             specialtyContainer.classList.remove('hidden-field');
             return;
         }
-
+        if (professionInput.value === 'TECNOLOGO MEDICO') {
+            populateSelect(specialtyInput, especialidadesTecnologoMedico);
+            specialtyInput.required = true;
+            specialtyContainer.classList.remove('hidden-field');
+            return;
+        }
         populateSelect(specialtyInput, []);
     };
 
@@ -833,12 +1055,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (institutionType !== 'UNIVERSIDAD') {
             universityInput.value = '';
+            refreshSearchableSelect(universityInput);
         }
         if (institutionType !== 'OTRA') {
             otherInstitutionInput.value = '';
         }
         if (!isInsnsb) {
             insnsbConditionInput.value = '';
+            refreshSearchableSelect(insnsbConditionInput);
         }
         if (!shouldRequestInsnsbCode) {
             insnsbCodeInput.value = '';
@@ -959,6 +1183,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         payload.CursoId = Number(appConfig.selectedCourseId ?? selectedCourse.idActividad ?? 0);
         payload.AceptaTratamientoDatos = dataPolicyInput.checked;
+        if (Object.prototype.hasOwnProperty.call(payload, 'AsistiraPresencialPrimerDia')) {
+            payload.AsistiraPresencialPrimerDia = payload.AsistiraPresencialPrimerDia === ''
+                ? null
+                : payload.AsistiraPresencialPrimerDia === 'true';
+        }
         payload.CostoFinal = finalCost;
         payload.NumeroCuotas = requiresPayment ? Number(installmentsInput.value || 1) : null;
 
@@ -969,7 +1198,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(appConfig.registrarUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify(payload)
             });
 
@@ -995,11 +1227,13 @@ document.addEventListener('DOMContentLoaded', () => {
     populateSelect(specialtyInput, []);
     populateSelect(universityInput, universidades);
     populateCountryCodeSelect();
+    document.querySelectorAll('select[data-searchable-select]').forEach(enhanceSearchableSelect);
 
     countryInput.value = 'PERU';
     if (isRestrictedDiplomado()) {
         professionInput.value = restrictedDiplomadoProfession;
     }
+    document.querySelectorAll('select[data-searchable-select]').forEach(refreshSearchableSelect);
 
     typeDocumentInput.addEventListener('change', toggleDocumentBehavior);
     documentNumberInput.addEventListener('input', () => {

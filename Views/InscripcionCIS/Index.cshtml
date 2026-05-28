@@ -201,7 +201,7 @@
                         <div class="form-group half-width">
                             <label for="numeroDocumento" class="required-label">Número de documento</label>
                             <input type="text" id="numeroDocumento" name="NumeroDocumento" maxlength="20" required>
-                            <small class="helper-text">Inscripción única por número de documento</small>
+                            <small class="helper-text">Ingresa el documento tal como figura en tu DNI, carnet de extranjería o pasaporte.</small>
                             <small id="dniLoader" class="loader-text" hidden>Consultando...</small>
 
                         </div>
@@ -245,15 +245,15 @@
                     <div class="form-row">
                         <div class="form-group half-width">
                             <label for="pais" class="required-label">País</label>
-                            <select id="pais" name="Pais" required></select>
+                            <select id="pais" name="Pais" required data-searchable-select data-search-placeholder="Buscar país..."></select>
                         </div>
                         <div class="form-group half-width" id="regionPeruGroup">
                             <label for="regionPeru" class="required-label">Departamento</label>
-                            <select id="regionPeru"></select>
+                            <select id="regionPeru" data-searchable-select data-search-placeholder="Buscar departamento..."></select>
                         </div>
                         <div class="form-group half-width hidden-field" id="regionExteriorGroup">
                             <label for="regionExterior" class="required-label">Región o ciudad</label>
-                            <input type="text" id="regionExterior" placeholder="Ej. Quito o Santiago">
+                            <input type="text" id="regionExterior" placeholder="Ej. Lima">
                         </div>
                         <input type="hidden" id="region" name="Region">
                     </div>
@@ -261,7 +261,7 @@
                     <div class="form-row">
                         <div class="form-group half-width">
                             <label for="profesion" class="required-label">Profesión</label>
-                            <select id="profesion" name="Profesion" required></select>
+                            <select id="profesion" name="Profesion" data-searchable-select data-search-placeholder="Buscar profesión..."></select>
                         </div>
                         <div class="form-group half-width hidden-field" id="especialidadContainer">
                             <label for="especialidad" class="required-label">Especialidad</label>
@@ -337,6 +337,19 @@
                             <input type="text" id="otroMedioComunicacion" name="OtroMedioComunicacion">
                         </div>
                     </div>
+
+                    @if (curso.SolicitaConfirmacionPresencialPrimerDia)
+                    {
+                        <div class="form-group">
+                            <label for="asistiraPresencialPrimerDia" class="required-label">Confirmación de asistencia presencial al primer día de clases</label>
+                            <select id="asistiraPresencialPrimerDia" name="AsistiraPresencialPrimerDia" required>
+                                <option value="">Seleccione...</option>
+                                <option value="true">Sí, contaré con asistencia presencial</option>
+                                <option value="false">No, no contaré con asistencia presencial</option>
+                            </select>
+                            <small class="helper-text">Esta informacion nos ayuda a organizar adecuadamente la presencialidad del inicio del curso.</small>
+                        </div>
+                    }
 
                     <div class="checkbox-group">
                         <input type="checkbox" id="aceptaTratamientoDatos" name="AceptaTratamientoDatos" value="true" required>

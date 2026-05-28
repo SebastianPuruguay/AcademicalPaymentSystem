@@ -72,6 +72,7 @@ SET nombre_actividad = @NombreActividad,
     url_banner_web = @UrlBannerWeb,
     url_programa_web = @UrlProgramaWeb,
     restriccion_inscripcion_unica = @RestriccionInscripcionUnica,
+    solicita_confirmacion_presencial_primer_dia = @SolicitaConfirmacionPresencialPrimerDia,
     visible_en_formulario = @VisibleEnFormulario,
     fue_pagado_historico = CASE
         WHEN UPPER(LTRIM(RTRIM(ISNULL(fue_pagado_historico, '')))) = 'SI' THEN 'Si'
@@ -115,6 +116,7 @@ SELECT @@ROWCOUNT;",
             command.Parameters.Add(new SqlParameter("@UrlBannerWeb", SqlDbType.NVarChar, 1000) { Value = DbValue(NormalizarTexto(input.UrlBannerWeb, uppercase: false)) });
             command.Parameters.Add(new SqlParameter("@UrlProgramaWeb", SqlDbType.NVarChar, 1000) { Value = DbValue(NormalizarTexto(input.UrlProgramaWeb, uppercase: false)) });
             command.Parameters.Add(new SqlParameter("@RestriccionInscripcionUnica", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.RestriccionInscripcionUnica, "No") });
+            command.Parameters.Add(new SqlParameter("@SolicitaConfirmacionPresencialPrimerDia", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.SolicitaConfirmacionPresencialPrimerDia, "No") });
             command.Parameters.Add(new SqlParameter("@VisibleEnFormulario", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.VisibleEnFormulario, "Si") });
 
             var affectedRows = Convert.ToInt32(await command.ExecuteScalarAsync());
@@ -145,7 +147,8 @@ SELECT @@ROWCOUNT;",
                     };
                 }
 
-                if (curso.RestriccionInscripcionUnica &&
+                var validarDuplicados = await DebeValidarInscripcionDuplicadaAsync(input.CursoId, connection, transaction);
+                if (validarDuplicados &&
                     await ExisteInscripcionDuplicadaAsync(input.CursoId, input.NumeroDocumento, input.Correo, connection, transaction))
                 {
                     await transaction.RollbackAsync();
@@ -522,6 +525,17 @@ SELECT @@ROWCOUNT;",
                     PagadosParciales = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("pagados_parciales"))),
                     Pendientes = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("pendientes"))),
                     SinCobro = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("sin_cobro"))),
+                    SolicitaConfirmacionPresencialPrimerDia = HasColumn(reader, "solicita_confirmacion_presencial_primer_dia") &&
+                        string.Equals(GetNullableString(reader, "solicita_confirmacion_presencial_primer_dia"), "Si", StringComparison.OrdinalIgnoreCase),
+                    AsistiranPresencialPrimerDia = HasColumn(reader, "asistiran_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("asistiran_presencial_primer_dia")))
+                        : 0,
+                    NoAsistiranPresencialPrimerDia = HasColumn(reader, "no_asistiran_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("no_asistiran_presencial_primer_dia")))
+                        : 0,
+                    SinRespuestaPresencialPrimerDia = HasColumn(reader, "sin_respuesta_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("sin_respuesta_presencial_primer_dia")))
+                        : 0,
                     MontoPagado = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_pagado"))),
                     MontoDeuda = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_deuda"))),
                     MontoTotal = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_total")))
@@ -598,6 +612,9 @@ SELECT @@ROWCOUNT;",
                     InstitucionProcedencia = GetNullableString(reader, "institucion_procedencia") ?? string.Empty,
                     CondicionLaboralInsnsb = GetNullableString(reader, "condicion_laboral_insnsb") ?? string.Empty,
                     MedioComunicacion = GetNullableString(reader, "medio_comunicacion") ?? string.Empty,
+                    AsistiraPresencialPrimerDia = HasColumn(reader, "asistira_presencial_primer_dia") && !reader.IsDBNull(reader.GetOrdinal("asistira_presencial_primer_dia"))
+                        ? reader.GetBoolean(reader.GetOrdinal("asistira_presencial_primer_dia"))
+                        : null,
                     FechaRegistro = reader.GetDateTime(reader.GetOrdinal("fecha_registro")),
                     CostoFinal = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("costo_final"))),
                     NumeroCuotas = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("numero_cuotas"))),
@@ -858,6 +875,32 @@ WHERE d.id_pago_izipay = @IdPagoIzipay;",
 
             var token = GetNullableString(reader, "token_pago_pasarela") ?? string.Empty;
             return MapPagoDemo(reader, token);
+        }
+
+        public async Task<ReservaPagoIzipayResultado> ReservarCreacionPagoIzipayAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new ReservaPagoIzipayResultado();
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync();
+
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_reservar_pago_izipay_por_token", connection);
+            command.Parameters.Add(new SqlParameter("@TokenPagoPasarela", SqlDbType.VarChar, 120) { Value = token.Trim() });
+
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                return new ReservaPagoIzipayResultado();
+            }
+
+            return new ReservaPagoIzipayResultado
+            {
+                EstadoReserva = GetNullableString(reader, "resultado_reserva") ?? "NO_DISPONIBLE",
+                Pago = MapPagoDemo(reader, token.Trim())
+            };
         }
 
         public async Task GuardarPagoIzipayAsync(string token, RespuestaCrearPagoIzipay resultado)
@@ -1162,7 +1205,8 @@ SELECT
     tc.celular_contacto_actividad,
     tc.url_banner_web,
     tc.url_programa_web,
-    tc.restriccion_inscripcion_unica
+    tc.restriccion_inscripcion_unica,
+    tc.solicita_confirmacion_presencial_primer_dia
 FROM dbo.tabla_central tc
 WHERE {condicionWhere}
 ORDER BY tc.id_actividad DESC;";
@@ -1212,7 +1256,12 @@ ORDER BY tc.id_actividad DESC;";
                 RestriccionInscripcionUnica = string.Equals(
                     GetNullableString(reader, "restriccion_inscripcion_unica"),
                     "Si",
-                    StringComparison.OrdinalIgnoreCase)
+                    StringComparison.OrdinalIgnoreCase),
+                SolicitaConfirmacionPresencialPrimerDia = HasColumn(reader, "solicita_confirmacion_presencial_primer_dia") &&
+                    string.Equals(
+                        GetNullableString(reader, "solicita_confirmacion_presencial_primer_dia"),
+                        "Si",
+                        StringComparison.OrdinalIgnoreCase)
             };
         }
 
@@ -1236,6 +1285,27 @@ ORDER BY tc.id_actividad DESC;";
 
             var result = await command.ExecuteScalarAsync();
             return result is not null && Convert.ToInt32(result) == 1;
+        }
+
+        private static async Task<bool> DebeValidarInscripcionDuplicadaAsync(
+            long cursoId,
+            SqlConnection connection,
+            SqlTransaction transaction)
+        {
+            await using var command = CreateTextCommand(@"
+SELECT CASE
+    WHEN UPPER(LTRIM(RTRIM(ISNULL(restriccion_inscripcion_unica, 'Si')))) = 'NO' THEN 0
+    ELSE 1
+END
+FROM dbo.tabla_central
+WHERE id_actividad = @CursoId;",
+                connection,
+                transaction);
+
+            command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
+
+            var result = await command.ExecuteScalarAsync();
+            return result is null || Convert.ToInt32(result) == 1;
         }
 
         private static async Task<long?> ObtenerCodigoDisponibleAsync(
@@ -1298,6 +1368,7 @@ ORDER BY tc.id_actividad DESC;";
             command.Parameters.Add(new SqlParameter("@MedioComunicacion", SqlDbType.NVarChar, -1) { Value = NormalizarTexto(input.MedioComunicacion, uppercase: true) });
             command.Parameters.Add(new SqlParameter("@OtroMedio", SqlDbType.NVarChar, -1) { Value = DbValue(NormalizarTexto(input.OtroMedioComunicacion, uppercase: true)) });
             command.Parameters.Add(new SqlParameter("@Autoriza", SqlDbType.BigInt) { Value = input.AceptaTratamientoDatos ? 1 : 0 });
+            command.Parameters.Add(new SqlParameter("@AsistiraPresencialPrimerDia", SqlDbType.Bit) { Value = DbValue(input.AsistiraPresencialPrimerDia) });
             command.Parameters.Add(new SqlParameter("@CostoFinal", SqlDbType.Decimal) { Precision = 10, Scale = 2, Value = input.CostoFinal ?? 0m });
             command.Parameters.Add(new SqlParameter("@NumeroCuotas", SqlDbType.Int) { Value = input.NumeroCuotas ?? 0 });
 

@@ -45,19 +45,29 @@
     <div class="admin-grid">
         <section class="admin-card">
             <h2>Curso</h2>
-            <form asp-action="Index" method="get" class="admin-form-stack">
+            <form id="adminCourseSelectorForm" asp-action="Index" method="get" class="admin-form-stack">
                 <div>
                     <label for="cursoId" class="form-label">Curso administrado</label>
-                    <select id="cursoId" name="cursoId" class="form-select" onchange="this.form.submit()">
+                    <div class="admin-course-filter" role="group" aria-label="Filtro por tipo de curso">
+                        <button type="button" class="admin-filter-chip active" data-course-charge-filter="todos">Todos</button>
+                        <button type="button" class="admin-filter-chip" data-course-charge-filter="Si">Pagados</button>
+                        <button type="button" class="admin-filter-chip" data-course-charge-filter="No">Gratuitos</button>
+                    </div>
+                    <div class="admin-search-select">
+                        <input id="cursoSearch" class="form-control" type="search" autocomplete="off" placeholder="Escriba el nombre o ID del curso..." value="@(cursoActual?.NombreActividad ?? string.Empty)" />
+                        <div id="cursoSearchResults" class="admin-search-results" hidden></div>
+                    </div>
+                    <select id="cursoId" name="cursoId" class="form-select admin-native-select-hidden" onchange="this.form.submit()">
                         @foreach (var curso in Model.Cursos)
                         {
+                            var tipoCobro = string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase) ? "Si" : "No";
                             if (curso.IdActividad == Model.CursoSeleccionadoId)
                             {
-                                <option value="@curso.IdActividad" selected>@curso.NombreActividad</option>
+                                <option value="@curso.IdActividad" data-charge="@tipoCobro" selected>@curso.NombreActividad</option>
                             }
                             else
                             {
-                                <option value="@curso.IdActividad">@curso.NombreActividad</option>
+                                <option value="@curso.IdActividad" data-charge="@tipoCobro">@curso.NombreActividad</option>
                             }
                         }
                     </select>
@@ -209,9 +219,16 @@
                         : "Consulta por curso los alumnos inscritos y sus datos principales de contacto.")
                 </p>
             </div>
-            @if (cursoTieneCobro && Model.CursoSeleccionadoId.HasValue)
+
             {
                 <div class="admin-toolbar-actions">
+                    <form asp-action="SincronizarPagosIzipay" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
+                        <button type="submit" class="btn btn-outline-secondary">
+                            Actualizar pagos IziPay
+                        </button>
+                    </form>
                     <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Abrir reporte de pagantes</a>
                 </div>
             }
@@ -395,11 +412,32 @@
                                                                 }
                                                                 else if (cuota.PuedePagarAhora)
                                                                 {
-                                                                    <span class="small text-primary">Habilitada para pago</span>
-                                                                    @if (cuota.IdPagoIzipay.HasValue)
-                                                                    {
-                                                                        <div class="small text-muted">IziPay #@cuota.IdPagoIzipay</div>
-                                                                    }
+                                                                    <div class="d-flex flex-column gap-1 align-items-start">
+                                                                        <span class="small text-primary">Habilitada para pago</span>
+                                                                        @if (cuota.IdPagoIzipay.HasValue)
+                                                                        {
+                                                                            <div class="small text-muted">IziPay #@cuota.IdPagoIzipay</div>
+                                                                        }
+                                                                        @if (!string.IsNullOrWhiteSpace(cuota.UrlPagoIzipay))
+                                                                        {
+                                                                            <a class="btn btn-sm btn-outline-primary" href="@cuota.UrlPagoIzipay" target="_blank" rel="noopener noreferrer">
+                                                                                Abrir link IziPay
+                                                                            </a>
+                                                                            <div class="small text-muted">Puedes compartir este link con el inscrito para pago presencial/asistido.</div>
+                                                                        }
+                                                                        else if (!string.IsNullOrWhiteSpace(cuota.TokenPagoPasarela))
+                                                                        {
+                                                                            <a class="btn btn-sm btn-outline-primary"
+                                                                               asp-controller="InscripcionCIS"
+                                                                               asp-action="IniciarPagoIzipay"
+                                                                               asp-route-token="@cuota.TokenPagoPasarela"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer">
+                                                                                Generar link IziPay
+                                                                            </a>
+                                                                            <div class="small text-muted">Abrira el flujo normal y reservara la cuota para evitar duplicados.</div>
+                                                                        }
+                                                                    </div>
                                                                 }
                                                                 else
                                                                 {
@@ -422,6 +460,97 @@
         }
     </section>
 </div>
+
+<script>
+    (() => {
+        const form = document.getElementById('adminCourseSelectorForm');
+        const select = document.getElementById('cursoId');
+        const search = document.getElementById('cursoSearch');
+        const results = document.getElementById('cursoSearchResults');
+        const chips = document.querySelectorAll('[data-course-charge-filter]');
+        let activeFilter = 'todos';
+
+        if (!form || !select || !search || !results) {
+            return;
+        }
+
+        const normalize = value => (value || '')
+            .toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+
+        const getOptions = () => Array.from(select.options).map(option => ({
+            value: option.value,
+            label: option.textContent.trim(),
+            charge: option.dataset.charge || 'No',
+            selected: option.selected
+        }));
+
+        const closeResults = () => {
+            results.hidden = true;
+        };
+
+        const renderResults = () => {
+            const query = normalize(search.value);
+            const matches = getOptions()
+                .filter(option => activeFilter === 'todos' || option.charge === activeFilter)
+                .filter(option => !query || normalize(`${option.value} ${option.label}`).includes(query))
+                .slice(0, 12);
+
+            results.innerHTML = '';
+
+            if (matches.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'admin-search-empty';
+                empty.textContent = 'No se encontraron cursos con ese filtro.';
+                results.appendChild(empty);
+                results.hidden = false;
+                return;
+            }
+
+            matches.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'admin-search-option';
+                button.innerHTML = `<strong>${option.label}</strong><span>ID ${option.value} · ${option.charge === 'Si' ? 'Pagado' : 'Gratuito'}</span>`;
+                button.addEventListener('mousedown', event => event.preventDefault());
+                button.addEventListener('click', () => {
+                    select.value = option.value;
+                    search.value = option.label;
+                    closeResults();
+                    form.submit();
+                });
+                results.appendChild(button);
+            });
+
+            results.hidden = false;
+        };
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                activeFilter = chip.dataset.courseChargeFilter || 'todos';
+                chips.forEach(item => item.classList.toggle('active', item === chip));
+                renderResults();
+                search.focus();
+            });
+        });
+
+        search.addEventListener('input', renderResults);
+        search.addEventListener('focus', renderResults);
+        search.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                closeResults();
+            }
+        });
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.admin-search-select') && !event.target.closest('.admin-course-filter')) {
+                closeResults();
+            }
+        });
+    })();
+</script>
 
 <div id="adminConfirmModal" class="admin-modal-backdrop" hidden>
     <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle">
