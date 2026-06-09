@@ -717,14 +717,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
 
-        const finalCost = calculateFinalCost();
-        if (finalCost <= 0) {
+        if (!courseHasChargeLogic()) {
             return false;
         }
 
         const baseCost = roundMoneyToCents(getBaseCost());
         const insnsbCost = roundMoneyToCents(getInsnsbCost());
-        return baseCost !== insnsbCost;
+        return baseCost > 0 && baseCost !== insnsbCost;
     };
 
     const getAllowedInstallmentOptions = () => {

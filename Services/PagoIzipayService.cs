@@ -61,6 +61,30 @@ namespace CURSO_INTERCULTURALIDAD.Services
             };
         }
 
+        public string? ConstruirUrlResumenPago(long idPagoIzipay)
+        {
+            if (idPagoIzipay <= 0)
+            {
+                return null;
+            }
+
+            var crearUrl = (_options.CrearPagoUrl ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(crearUrl))
+            {
+                return null;
+            }
+
+            const string apiCrearSegment = "/api/pagoizipay/crear";
+            var index = crearUrl.LastIndexOf(apiCrearSegment, StringComparison.OrdinalIgnoreCase);
+            var baseUrl = index >= 0
+                ? crearUrl[..index]
+                : crearUrl.EndsWith("/crear", StringComparison.OrdinalIgnoreCase)
+                    ? crearUrl[..^"/crear".Length]
+                    : crearUrl.TrimEnd('/');
+
+            return $"{baseUrl.TrimEnd('/')}/PagoIziPayViews/ResumenPago?idPagoIziPay={idPagoIzipay}";
+        }
+
         public async Task<RespuestaCrearPagoIzipay> CrearPagoAsync(PagoDemoViewModel pago, CancellationToken cancellationToken = default)
         {
             if (!EstaConfigurado)

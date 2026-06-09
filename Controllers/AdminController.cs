@@ -161,8 +161,8 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
 
             try
             {
-                var seguimiento = await _cursoRepository.ObtenerSeguimientoPagosAdminAsync(cursoId);
-                var resultado = await SincronizarPagosPendientesIzipayConResumenAsync(seguimiento);
+                var idsPendientes = await _cursoRepository.ObtenerIdsPagoIzipayPendientesPorCursoAsync(cursoId);
+                var resultado = await SincronizarPagosIzipayPorIdsAsync(idsPendientes);
                 var dashboard = await ConstruirDashboardAsync(cursoId);
 
                 if (resultado.Consultados == 0)
@@ -1308,6 +1308,16 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 .Distinct()
                 .ToList();
 
+            return await SincronizarPagosIzipayPorIdsAsync(idsPendientes);
+        }
+
+        private async Task<(int Consultados, int PagosDetectados, int Fallidos, bool HuboCambiosVisibles)> SincronizarPagosIzipayPorIdsAsync(IReadOnlyList<long> idsPendientes)
+        {
+            if (!_pagoIzipayService.EstaConfigurado || idsPendientes.Count == 0)
+            {
+                return (0, 0, 0, false);
+            }
+
             var huboCambiosVisibles = false;
             var consultados = 0;
             var pagosDetectados = 0;
@@ -1323,7 +1333,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     continue;
                 }
 
-                await _cursoRepository.ActualizarEstadoPagoIzipayAsync(estado);
+                await _cursoRepository.ActualizarEstadoPagoIzipayDirectoAsync(estado);
                 var pagoDetectado = estado.YaPago
                     || string.Equals(estado.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(estado.Estado, "CON COMPROBANTE", StringComparison.OrdinalIgnoreCase)

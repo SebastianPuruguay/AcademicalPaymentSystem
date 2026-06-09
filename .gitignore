@@ -2,6 +2,7 @@ appsettings.json
 ASPNETCORE_ENVIRONMENT=Development
 bin/
 obj/
+artifacts/
 .vs
 .docs
 .vscode/
@@ -41,3 +42,4 @@ obj/
 *.pdf   
 QAS
 sql
+cursos.txt

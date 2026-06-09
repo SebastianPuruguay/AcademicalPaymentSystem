@@ -3,10 +3,11 @@
     ViewData["Title"] = "Panel Admin";
     var cursoActual = Model.Cursos.FirstOrDefault(item => item.IdActividad == Model.CursoSeleccionadoId);
     var cursoTieneCobro = string.Equals(cursoActual?.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
+    var costoGeneralCurso = decimal.Round(cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+    var costoInsnsbCurso = decimal.Round(cursoActual?.CostoPersonalInsnsb ?? cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
     var requiereCodigoInsnsb = cursoTieneCobro
-        && (cursoActual?.CostoPersonalInsnsb ?? 0m) > 0m
-        && decimal.Round(cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero) !=
-           decimal.Round(cursoActual?.CostoPersonalInsnsb ?? cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+        && costoGeneralCurso > 0m
+        && costoGeneralCurso != costoInsnsbCurso;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -144,68 +145,73 @@
     @if (requiereCodigoInsnsb)
     {
     <section class="admin-card">
-        <h2>Últimos códigos del curso</h2>
+        <details class="admin-collapsible" id="adminCodesSection">
+            <summary>
+                <span>Últimos códigos del curso</span>
+                <small>@Model.Codigos.Count registro(s). Despliega para revisar, ordenar o eliminar.</small>
+            </summary>
 
-        @if (Model.Codigos.Count == 0)
-        {
-            <p class="text-muted mb-0">Aún no hay códigos registrados para este curso.</p>
-        }
-        else
-        {
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Documento asignado</th>
-                            <th>Estado</th>
-                            <th>Generado</th>
-                            <th>Usado por</th>
-                            <th>Observación</th>
-                            <th class="text-end">Accion</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var codigo in Model.Codigos)
-                        {
+            @if (Model.Codigos.Count == 0)
+            {
+                <p class="text-muted mb-0">Aún no hay códigos registrados para este curso.</p>
+            }
+            else
+            {
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover align-middle" id="adminCodesTable">
+                        <thead>
                             <tr>
-                                <td><code>@codigo.Codigo</code></td>
-                                <td>@(string.IsNullOrWhiteSpace(codigo.DniAsignado) ? "-" : codigo.DniAsignado)</td>
-                                <td>
-                                    <span class="status-badge @(codigo.Estado == "Usado" ? "used" : "available")">@codigo.Estado</span>
-                                </td>
-                                <td>@codigo.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td>
-                                    @if (string.IsNullOrWhiteSpace(codigo.UsadoPorDocumento) && string.IsNullOrWhiteSpace(codigo.UsadoPorCorreo))
-                                    {
-                                        <span class="text-muted">Disponible</span>
-                                    }
-                                    else
-                                    {
-                                        <div>@codigo.UsadoPorDocumento</div>
-                                        <div class="small text-muted">@codigo.UsadoPorCorreo</div>
-                                    }
-                                </td>
-                                <td>@(string.IsNullOrWhiteSpace(codigo.Observacion) ? "-" : codigo.Observacion)</td>
-                                <td class="text-end">
-                                    <form asp-action="EliminarCodigo" method="post" class="d-inline js-confirm-form">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
-                                        <input type="hidden" name="codigoId" value="@codigo.IdCodigo" />
-                                        <button type="submit"
-                                                class="btn btn-sm btn-outline-danger"
-                                                data-confirm-title="Eliminar código INSNSB"
-                                                data-confirm-message="Se eliminara el código @codigo.Codigo. Esta accion no se puede deshacer.">
-                                            Eliminar
-                                        </button>
-                                    </form>
-                                </td>
+                                <th>Código</th>
+                                <th>Documento asignado</th>
+                                <th><button type="button" class="admin-sort-button js-sort-codes" data-sort-key="estado">Estado</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-codes" data-sort-key="generado">Generado</button></th>
+                                <th>Usado por</th>
+                                <th>Observación</th>
+                                <th class="text-end">Accion</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+                        </thead>
+                        <tbody id="adminCodesTableBody">
+                            @foreach (var codigo in Model.Codigos)
+                            {
+                                <tr data-sort-estado="@codigo.Estado" data-sort-generado="@codigo.FechaGeneracion.ToString("yyyyMMddHHmmss")">
+                                    <td><code>@codigo.Codigo</code></td>
+                                    <td>@(string.IsNullOrWhiteSpace(codigo.DniAsignado) ? "-" : codigo.DniAsignado)</td>
+                                    <td>
+                                        <span class="status-badge @(codigo.Estado == "Usado" ? "used" : "available")">@codigo.Estado</span>
+                                    </td>
+                                    <td>@codigo.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(codigo.UsadoPorDocumento) && string.IsNullOrWhiteSpace(codigo.UsadoPorCorreo))
+                                        {
+                                            <span class="text-muted">Disponible</span>
+                                        }
+                                        else
+                                        {
+                                            <div>@codigo.UsadoPorDocumento</div>
+                                            <div class="small text-muted">@codigo.UsadoPorCorreo</div>
+                                        }
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(codigo.Observacion) ? "-" : codigo.Observacion)</td>
+                                    <td class="text-end">
+                                        <form asp-action="EliminarCodigo" method="post" class="d-inline js-confirm-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
+                                            <input type="hidden" name="codigoId" value="@codigo.IdCodigo" />
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    data-confirm-title="Eliminar código INSNSB"
+                                                    data-confirm-message="Se eliminara el código @codigo.Codigo. Esta accion no se puede deshacer.">
+                                                Eliminar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </details>
     </section>
     }
 
@@ -425,6 +431,10 @@
                                                                             </a>
                                                                             <div class="small text-muted">Puedes compartir este link con el inscrito para pago presencial/asistido.</div>
                                                                         }
+                                                                        else if (cuota.IdPagoIzipay.HasValue)
+                                                                        {
+                                                                            <div class="small text-warning">Esta cuota ya tiene boleta IziPay generada, pero no se pudo obtener su URL. Verifique la configuracion o el campo url_pago_izipay.</div>
+                                                                        }
                                                                         else if (!string.IsNullOrWhiteSpace(cuota.TokenPagoPasarela))
                                                                         {
                                                                             <a class="btn btn-sm btn-outline-primary"
@@ -567,6 +577,62 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            var codesTableBody = document.getElementById('adminCodesTableBody');
+            var codeSortButtons = document.querySelectorAll('.js-sort-codes');
+            var codeSortState = { key: 'generado', direction: 'desc' };
+
+            function compareCodeValues(a, b) {
+                if (a === b) {
+                    return 0;
+                }
+
+                return a > b ? 1 : -1;
+            }
+
+            function applyCodesSort() {
+                if (!codesTableBody) {
+                    return;
+                }
+
+                var rows = Array.from(codesTableBody.querySelectorAll('tr'));
+                rows.sort(function (left, right) {
+                    var leftValue = left.dataset['sort' + codeSortState.key.charAt(0).toUpperCase() + codeSortState.key.slice(1)] || '';
+                    var rightValue = right.dataset['sort' + codeSortState.key.charAt(0).toUpperCase() + codeSortState.key.slice(1)] || '';
+                    var result = compareCodeValues(leftValue, rightValue);
+                    return codeSortState.direction === 'asc' ? result : result * -1;
+                });
+
+                rows.forEach(function (row) {
+                    codesTableBody.appendChild(row);
+                });
+
+                codeSortButtons.forEach(function (button) {
+                    var isActive = button.getAttribute('data-sort-key') === codeSortState.key;
+                    button.classList.toggle('is-active', isActive);
+                    button.setAttribute('data-sort-direction', isActive ? codeSortState.direction : '');
+                });
+            }
+
+            codeSortButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var key = button.getAttribute('data-sort-key');
+                    if (!key) {
+                        return;
+                    }
+
+                    if (codeSortState.key === key) {
+                        codeSortState.direction = codeSortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        codeSortState.key = key;
+                        codeSortState.direction = key === 'generado' ? 'desc' : 'asc';
+                    }
+
+                    applyCodesSort();
+                });
+            });
+
+            applyCodesSort();
+
             document.querySelectorAll('.js-toggle-detail').forEach(function (button) {
                 button.addEventListener('click', function () {
                     var targetId = button.getAttribute('data-target');

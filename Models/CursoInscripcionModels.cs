@@ -284,6 +284,7 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string? UrlComprobantePdfIzipay { get; init; }
         public string? VolverUrl { get; init; }
         public bool PuedePagarAhora { get; init; }
+        public bool PermitePagoDemo { get; init; }
         public string? BloqueoPagoMensaje { get; init; }
     }
 

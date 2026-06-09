@@ -25,7 +25,7 @@ namespace CURSO_INTERCULTURALIDAD.Services
 
         public static bool RequiereCodigoInsnsb(CursoPagadoResumen curso, decimal costoFinal)
         {
-            if (!RequierePago(curso, costoFinal))
+            if (!curso.TieneLogicaCobro)
             {
                 return false;
             }
@@ -33,7 +33,7 @@ namespace CURSO_INTERCULTURALIDAD.Services
             var costoBase = decimal.Round(curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
             var costoPersonalInsnsb = decimal.Round(curso.CostoPersonalInsnsb ?? curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
 
-            return costoBase != costoPersonalInsnsb;
+            return costoBase > 0m && costoBase != costoPersonalInsnsb;
         }
 
         public static int ResolverNumeroCuotas(CursoPagadoResumen curso, decimal costoFinal, int? numeroCuotasSolicitado)

@@ -144,8 +144,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
 
                     if (costoFinalCalculado <= 0m)
                     {
-                        input.NumeroCuotas = 0;
-                        ModelState.Remove(nameof(FormularioInscripcionCursoInput.NumeroCuotas));
+                        input.NumeroCuotas = null;
                     }
                 }
             }
@@ -461,6 +460,15 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 {
                     return Redirect(pago.UrlPagoIzipay);
                 }
+
+                var urlResumenExistente = _pagoIzipayService.ConstruirUrlResumenPago(pago.IdPagoIzipay.Value);
+                if (!string.IsNullOrWhiteSpace(urlResumenExistente))
+                {
+                    return Redirect(urlResumenExistente);
+                }
+
+                TempData["PagoDemoError"] = $"La cuota ya tiene una boleta IziPay generada (#{pago.IdPagoIzipay.Value}), pero no se pudo reconstruir su link de pago. Verifique la configuracion PagoIzipay:CrearPagoUrl.";
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
             }
 
             var reserva = await _cursoRepository.ReservarCreacionPagoIzipayAsync(token);
@@ -469,6 +477,18 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             if (pago.IdPagoIzipay.HasValue && !string.IsNullOrWhiteSpace(pago.UrlPagoIzipay))
             {
                 return Redirect(pago.UrlPagoIzipay);
+            }
+
+            if (pago.IdPagoIzipay.HasValue)
+            {
+                var urlResumenExistente = _pagoIzipayService.ConstruirUrlResumenPago(pago.IdPagoIzipay.Value);
+                if (!string.IsNullOrWhiteSpace(urlResumenExistente))
+                {
+                    return Redirect(urlResumenExistente);
+                }
+
+                TempData["PagoDemoError"] = $"La cuota ya tiene una boleta IziPay generada (#{pago.IdPagoIzipay.Value}), pero no se pudo reconstruir su link de pago. Verifique la configuracion PagoIzipay:CrearPagoUrl.";
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
             }
 
             if (reserva.EnProceso)
@@ -486,8 +506,33 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             var resultado = await _pagoIzipayService.CrearPagoAsync(pago, cancellationToken);
             if (resultado.Exitoso && !string.IsNullOrWhiteSpace(resultado.UrlPago))
             {
-                await _cursoRepository.GuardarPagoIzipayAsync(token, resultado);
-                return Redirect(resultado.UrlPago);
+                var pagoGuardado = await _cursoRepository.GuardarPagoIzipayAsync(token, resultado);
+                if (pagoGuardado)
+                {
+                    return Redirect(resultado.UrlPago);
+                }
+
+                var pagoActualizado = await _cursoRepository.ObtenerPagoDemoAsync(token);
+                if (!string.IsNullOrWhiteSpace(pagoActualizado?.UrlPagoIzipay))
+                {
+                    return Redirect(pagoActualizado.UrlPagoIzipay);
+                }
+
+                if (pagoActualizado?.IdPagoIzipay.HasValue == true)
+                {
+                    var urlResumenExistente = _pagoIzipayService.ConstruirUrlResumenPago(pagoActualizado.IdPagoIzipay.Value);
+                    if (!string.IsNullOrWhiteSpace(urlResumenExistente))
+                    {
+                        return Redirect(urlResumenExistente);
+                    }
+                }
+
+                _logger.LogError(
+                    "IziPay creo el pago {IdPagoIzipay} para el token {TokenPagoPasarela}, pero no se pudo guardar en BD. Se evita redireccionar para no generar una boleta huerfana.",
+                    resultado.IdPagoIziPay,
+                    token);
+                TempData["PagoDemoError"] = "IziPay genero una respuesta, pero el sistema no pudo guardar el enlace en la base de datos. No se redirigira al pago para evitar una boleta no trazable. Intente nuevamente o contacte a soporte.";
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
             }
 
             TempData["PagoDemoError"] = resultado.Mensaje;
@@ -540,6 +585,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 UrlComprobantePdfIzipay = modelo.UrlComprobantePdfIzipay,
                 VolverUrl = modelo.VolverUrl,
                 PuedePagarAhora = modelo.PuedePagarAhora,
+                PermitePagoDemo = !_pagoIzipayService.EstaConfigurado,
                 BloqueoPagoMensaje = modelo.BloqueoPagoMensaje
             });
         }
@@ -550,6 +596,12 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         {
             if (string.IsNullOrWhiteSpace(token))
             {
+                return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
+            }
+
+            if (_pagoIzipayService.EstaConfigurado)
+            {
+                TempData["PagoDemoError"] = "La confirmacion manual de pago demo no esta habilitada cuando IziPay esta configurado.";
                 return RedirectToAction(nameof(PagoDemo), new { token, pagoConfirmado = false });
             }
 

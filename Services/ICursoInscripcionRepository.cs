@@ -20,7 +20,9 @@ namespace CURSO_INTERCULTURALIDAD.Services
         Task<PagoDemoViewModel?> ObtenerPagoDemoAsync(string token);
         Task<PagoDemoViewModel?> ObtenerPagoDemoPorIdPagoIzipayAsync(long idPagoIzipay);
         Task<ReservaPagoIzipayResultado> ReservarCreacionPagoIzipayAsync(string token);
-        Task GuardarPagoIzipayAsync(string token, RespuestaCrearPagoIzipay resultado);
+        Task<bool> GuardarPagoIzipayAsync(string token, RespuestaCrearPagoIzipay resultado);
+        Task<IReadOnlyList<long>> ObtenerIdsPagoIzipayPendientesPorCursoAsync(long cursoId);
+        Task<string?> ActualizarEstadoPagoIzipayDirectoAsync(RespuestaEstadoPagoIzipay estadoPago);
         Task<string?> ActualizarEstadoPagoIzipayAsync(RespuestaEstadoPagoIzipay estadoPago);
         Task<SeguimientoAlumnoDashboard?> MarcarCuotaComoPagadaAsync(string token);
     }
