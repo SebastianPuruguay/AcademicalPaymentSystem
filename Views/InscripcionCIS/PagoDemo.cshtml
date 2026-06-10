@@ -103,17 +103,17 @@
                             }
                             @if (!string.IsNullOrWhiteSpace(Model.CodigoAutorizacionIzipay))
                             {
-                                <div class="helper-text">Codigo de autorizacion: @Model.CodigoAutorizacionIzipay</div>
+                                <div class="helper-text">Código de autorizacion: @Model.CodigoAutorizacionIzipay</div>
                             }
                             @if (string.IsNullOrWhiteSpace(Model.NumeroComprobanteIzipay) && string.IsNullOrWhiteSpace(Model.CodigoAutorizacionIzipay))
                             {
-                                <div class="helper-text">Si IziPay aun no termina el proceso, el comprobante llegara al correo en cuanto quede disponible.</div>
+                                <div class="helper-text">Si IziPay aún no termina el proceso, el comprobante llegara al correo en cuanto quede disponible.</div>
                             }
                         </div>
                     </div>
                 }
 
-                @if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase) && Model.PuedePagarAhora)
+                @if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase) && Model.PuedePagarAhora && Model.PermitePagoDemo)
                 {
                     <form method="post" asp-action="ConfirmarPagoDemo" class="selection-form">
                         @Html.AntiForgeryToken()
@@ -122,6 +122,12 @@
                             <button type="submit">Confirmar pago demo</button>
                         </div>
                     </form>
+                }
+                else if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase) && Model.PuedePagarAhora)
+                {
+                    <div class="status-box status-error">
+                        La confirmacion manual demo esta deshabilitada. Use el enlace oficial de IziPay para registrar el pago.
+                    </div>
                 }
                 else if (!string.Equals(Model.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase))
                 {

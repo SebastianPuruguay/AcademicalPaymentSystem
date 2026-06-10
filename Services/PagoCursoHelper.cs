@@ -6,11 +6,34 @@ namespace CURSO_INTERCULTURALIDAD.Services
     {
         public static decimal CalcularCostoFinal(CursoPagadoResumen curso, bool esInsnsb)
         {
+            if (curso.EsGratisGlobal)
+            {
+                return 0m;
+            }
+
             var monto = esInsnsb
                 ? (curso.CostoPersonalInsnsb ?? curso.CostoBase ?? 0m)
                 : (curso.CostoBase ?? 0m);
 
             return decimal.Round(monto, 2, MidpointRounding.AwayFromZero);
+        }
+
+        public static bool RequierePago(CursoPagadoResumen curso, decimal costoFinal)
+        {
+            return curso.RequierePago(costoFinal);
+        }
+
+        public static bool RequiereCodigoInsnsb(CursoPagadoResumen curso, decimal costoFinal)
+        {
+            if (!curso.TieneLogicaCobro)
+            {
+                return false;
+            }
+
+            var costoBase = decimal.Round(curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+            var costoPersonalInsnsb = decimal.Round(curso.CostoPersonalInsnsb ?? curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+
+            return costoBase > 0m && costoBase != costoPersonalInsnsb;
         }
 
         public static int ResolverNumeroCuotas(CursoPagadoResumen curso, decimal costoFinal, int? numeroCuotasSolicitado)

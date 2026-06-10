@@ -150,6 +150,50 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             }
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SincronizarPagosIzipay(long cursoId)
+        {
+            if (!EstaAutenticado())
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            try
+            {
+                var idsPendientes = await _cursoRepository.ObtenerIdsPagoIzipayPendientesPorCursoAsync(cursoId);
+                var resultado = await SincronizarPagosIzipayPorIdsAsync(idsPendientes);
+                var dashboard = await ConstruirDashboardAsync(cursoId);
+
+                if (resultado.Consultados == 0)
+                {
+                    return View("Index", CopiarDashboard(
+                        dashboard,
+                        null,
+                        "No se encontraron boletas IziPay pendientes de sincronizar para este curso."));
+                }
+
+                var mensaje = $"Sincronizacion IziPay completada: {resultado.Consultados} boleta(s) consultada(s), {resultado.PagosDetectados} pago(s) detectado(s)";
+                if (resultado.Fallidos > 0)
+                {
+                    mensaje += $", {resultado.Fallidos} sin respuesta correcta de IziPay";
+                }
+
+                mensaje += ".";
+
+                return View("Index", CopiarDashboard(dashboard, null, mensaje));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sincronizando pagos IziPay para el curso {CursoId}.", cursoId);
+                var dashboard = await ConstruirDashboardAsync(cursoId);
+                return View("Index", CopiarDashboard(
+                    dashboard,
+                    "No se pudo sincronizar con IziPay. Verifique la conectividad con el servicio y vuelva a intentarlo.",
+                    null));
+            }
+        }
+
         [HttpGet]
         public async Task<IActionResult> EditarCurso(long cursoId)
         {
@@ -455,7 +499,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 input,
                 vistaPrevia,
                 null,
-                "Vista previa actualizada. Aun no se guardaron cambios en la base de datos."));
+                "Vista previa actualizada. Aún no se guardaron cambios en la base de datos."));
         }
 
         [HttpPost]
@@ -516,6 +560,9 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             }
 
             var detalle = await _cursoRepository.ObtenerReporteInscritosCursoAsync(cursoSeleccionadoId.Value);
+            detalle.CursoTieneCobro = cursos
+                .FirstOrDefault(curso => curso.IdActividad == cursoSeleccionadoId.Value)
+                ?.TieneLogicaCobro == true;
             return new ReporteInscritosViewModel
             {
                 Cursos = cursos,
@@ -560,6 +607,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     Correo = alumno.Correo,
                     Celular = alumno.Celular,
                     InstitucionProcedencia = alumno.InstitucionProcedencia,
+                    AsistiraPresencialPrimerDia = alumno.AsistiraPresencialPrimerDia,
                     FechaRegistro = alumno.FechaRegistro,
                     FechaUltimoPago = alumno.FechaUltimoPago,
                     CostoFinal = alumno.CostoFinal,
@@ -581,6 +629,10 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 .ThenBy(item => item.Apellidos)
                 .ThenBy(item => item.Nombres)
                 .ToList();
+            var itemsConPago = items
+                .Where(EsInscritoConPagoParaReporte)
+                .ToList();
+            var cursoActual = cursos.FirstOrDefault(curso => curso.IdActividad == cursoSeleccionadoId.Value);
 
             return new ReportePagantesViewModel
             {
@@ -591,7 +643,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 Detalle = new ReportePagantesDetalle
                 {
                     CursoId = cursoSeleccionadoId.Value,
-                    NombreCurso = cursos.FirstOrDefault(curso => curso.IdActividad == cursoSeleccionadoId.Value)?.NombreActividad ?? string.Empty,
+                    NombreCurso = cursoActual?.NombreActividad ?? string.Empty,
                     FiltroEstadoPago = filtroEstado,
                     Busqueda = textoBusqueda,
                     TotalInscritos = todosItems.Count,
@@ -600,12 +652,21 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     PagadosParciales = todosItems.Count(item => item.EstadoReportePago == "PAGADO_PARCIAL"),
                     Pendientes = todosItems.Count(item => item.EstadoReportePago == "PENDIENTE"),
                     SinCobro = todosItems.Count(item => item.EstadoReportePago == "SIN_COBRO"),
-                    MontoPagadoTotal = items.Sum(item => item.MontoPagado),
-                    MontoPendienteTotal = items.Sum(item => item.MontoPendiente),
-                    MontoComprometidoTotal = items.Sum(item => item.CostoFinal),
+                    SolicitaConfirmacionPresencialPrimerDia = cursoActual?.SolicitaConfirmacionPresencialPrimerDia == true,
+                    AsistiranPresencialPrimerDia = todosItems.Count(item => item.AsistiraPresencialPrimerDia == true),
+                    NoAsistiranPresencialPrimerDia = todosItems.Count(item => item.AsistiraPresencialPrimerDia == false),
+                    SinRespuestaPresencialPrimerDia = todosItems.Count(item => !item.AsistiraPresencialPrimerDia.HasValue),
+                    MontoPagadoTotal = itemsConPago.Sum(item => item.MontoPagado),
+                    MontoPendienteTotal = itemsConPago.Sum(item => item.MontoPendiente),
+                    MontoComprometidoTotal = itemsConPago.Sum(item => item.CostoFinal),
                     Items = items
                 }
             };
+        }
+
+        private static bool EsInscritoConPagoParaReporte(ReportePagantesItem item)
+        {
+            return item.EstadoReportePago is "PAGADO" or "PAGADO_PARCIAL";
         }
 
         private static string NormalizarFiltroEstadoPago(string? estadoPago)
@@ -661,6 +722,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         {
             var resumen = detalle.Resumen;
             var mostrarSinCobro = resumen.SinCobro > 0;
+            var cursoTieneCobro = detalle.CursoTieneCobro;
             var builder = new StringBuilder();
             builder.AppendLine("<!DOCTYPE html>");
             builder.AppendLine("<html><head><meta charset=\"utf-8\">");
@@ -680,26 +742,38 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             builder.AppendLine("<h2>Resumen general</h2>");
             builder.AppendLine("<table><thead><tr><th>Indicador</th><th class=\"num\">Valor</th></tr></thead><tbody>");
             builder.AppendLine($"<tr><td>Total registros</td><td class=\"num\">{resumen.TotalInscritos}</td></tr>");
-            builder.AppendLine($"<tr><td>Inscritos</td><td class=\"num\">{resumen.Pagados + resumen.PagadosParciales}</td></tr>");
-            builder.AppendLine($"<tr><td>Pre-inscritos</td><td class=\"num\">{resumen.Pendientes}</td></tr>");
+            if (cursoTieneCobro)
+            {
+                builder.AppendLine($"<tr><td>Inscritos</td><td class=\"num\">{resumen.Pagados + resumen.PagadosParciales}</td></tr>");
+                builder.AppendLine($"<tr><td>Pre-inscritos</td><td class=\"num\">{resumen.Pendientes}</td></tr>");
+            }
             builder.AppendLine($"<tr><td>Internos INSNSB</td><td class=\"num\">{resumen.Internos}</td></tr>");
             builder.AppendLine($"<tr><td>Externos</td><td class=\"num\">{resumen.Externos}</td></tr>");
-            builder.AppendLine($"<tr><td>Pagado</td><td class=\"num\">{resumen.Pagados}</td></tr>");
-            builder.AppendLine($"<tr><td>Pagado parcial</td><td class=\"num\">{resumen.PagadosParciales}</td></tr>");
-            builder.AppendLine($"<tr><td>Pendiente</td><td class=\"num\">{resumen.Pendientes}</td></tr>");
-            if (mostrarSinCobro)
+            if (resumen.SolicitaConfirmacionPresencialPrimerDia)
             {
-                builder.AppendLine($"<tr><td>Sin cobro</td><td class=\"num\">{resumen.SinCobro}</td></tr>");
+                builder.AppendLine($"<tr><td>Asistiran presencialmente al primer dia</td><td class=\"num\">{resumen.AsistiranPresencialPrimerDia}</td></tr>");
+                builder.AppendLine($"<tr><td>No asistiran presencialmente al primer dia</td><td class=\"num\">{resumen.NoAsistiranPresencialPrimerDia}</td></tr>");
+                
             }
-            builder.AppendLine($"<tr><td>Monto pagado</td><td class=\"num\">{Money(resumen.MontoPagado)}</td></tr>");
-            builder.AppendLine($"<tr><td>Deuda pendiente</td><td class=\"num\">{Money(resumen.MontoDeuda)}</td></tr>");
-            builder.AppendLine($"<tr><td>Total pagado + deuda</td><td class=\"num\">{Money(resumen.MontoTotal)}</td></tr>");
+            if (cursoTieneCobro)
+            {
+                builder.AppendLine($"<tr><td>Pagado</td><td class=\"num\">{resumen.Pagados}</td></tr>");
+                builder.AppendLine($"<tr><td>Pagado parcial</td><td class=\"num\">{resumen.PagadosParciales}</td></tr>");
+                builder.AppendLine($"<tr><td>Pendiente</td><td class=\"num\">{resumen.Pendientes}</td></tr>");
+                if (mostrarSinCobro)
+                {
+                    builder.AppendLine($"<tr><td>Sin cobro</td><td class=\"num\">{resumen.SinCobro}</td></tr>");
+                }
+                builder.AppendLine($"<tr><td>Monto pagado</td><td class=\"num\">{Money(resumen.MontoPagado)}</td></tr>");
+                builder.AppendLine($"<tr><td>Deuda pendiente con pago</td><td class=\"num\">{Money(resumen.MontoDeuda)}</td></tr>");
+                builder.AppendLine($"<tr><td>Total comprometido con pago</td><td class=\"num\">{Money(resumen.MontoTotal)}</td></tr>");
+            }
             builder.AppendLine("</tbody></table>");
 
-            AppendReporteTable(builder, "Inscritos por pais", detalle.PorPais, mostrarSinCobro);
-            AppendReporteTable(builder, "Inscritos por region", detalle.PorRegion, mostrarSinCobro);
-            AppendReporteTable(builder, "Inscritos por institucion de procedencia", detalle.PorInstitucion, mostrarSinCobro);
-            AppendReporteTable(builder, "Internos vs externos", detalle.PorTipoParticipante, mostrarSinCobro);
+            AppendReporteTable(builder, "Inscritos por pais", detalle.PorPais, mostrarSinCobro, cursoTieneCobro);
+            AppendReporteTable(builder, "Inscritos por region", detalle.PorRegion, mostrarSinCobro, cursoTieneCobro);
+            AppendReporteTable(builder, "Inscritos por institucion de procedencia", detalle.PorInstitucion, mostrarSinCobro, cursoTieneCobro);
+            AppendReporteTable(builder, "Internos vs externos", detalle.PorTipoParticipante, mostrarSinCobro, cursoTieneCobro);
 
             builder.AppendLine("</body></html>");
             return builder.ToString();
@@ -708,6 +782,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         private static string ConstruirReportePagantesHtmlExportable(ReportePagantesDetalle detalle, string destino)
         {
             var mostrarSinCobro = detalle.SinCobro > 0;
+            var cursoPreguntaPresencialidad = detalle.SolicitaConfirmacionPresencialPrimerDia;
             var builder = new StringBuilder();
             builder.AppendLine("<!DOCTYPE html>");
             builder.AppendLine("<html><head><meta charset=\"utf-8\">");
@@ -741,19 +816,30 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             {
                 builder.AppendLine($"<tr><td>Sin cobro</td><td class=\"num\">{detalle.SinCobro}</td></tr>");
             }
+            if (cursoPreguntaPresencialidad)
+            {
+                builder.AppendLine($"<tr><td>Asistiran presencialmente al primer dia</td><td class=\"num\">{detalle.AsistiranPresencialPrimerDia}</td></tr>");
+                builder.AppendLine($"<tr><td>No asistiran presencialmente al primer dia</td><td class=\"num\">{detalle.NoAsistiranPresencialPrimerDia}</td></tr>");
+                builder.AppendLine($"<tr><td>Sin respuesta presencial</td><td class=\"num\">{detalle.SinRespuestaPresencialPrimerDia}</td></tr>");
+            }
             builder.AppendLine($"<tr><td>Monto pagado</td><td class=\"num\">{Money(detalle.MontoPagadoTotal)}</td></tr>");
-            builder.AppendLine($"<tr><td>Monto pendiente</td><td class=\"num\">{Money(detalle.MontoPendienteTotal)}</td></tr>");
-            builder.AppendLine($"<tr><td>Monto comprometido</td><td class=\"num\">{Money(detalle.MontoComprometidoTotal)}</td></tr>");
+            builder.AppendLine($"<tr><td>Monto pendiente con pago</td><td class=\"num\">{Money(detalle.MontoPendienteTotal)}</td></tr>");
+            builder.AppendLine($"<tr><td>Monto comprometido con pago</td><td class=\"num\">{Money(detalle.MontoComprometidoTotal)}</td></tr>");
             builder.AppendLine("</tbody></table>");
 
             builder.AppendLine("<h2>Detalle de inscritos segun estado de pago</h2>");
             builder.AppendLine("<table>");
-            builder.AppendLine("<thead><tr><th>Alumno</th><th>DNI / Documento</th><th>Celular</th><th>Correo</th><th>Institucion de procedencia</th><th>Fecha registro</th><th>Ultimo pago</th><th>Estado reporte</th><th class=\"num\">Monto pagado</th><th class=\"num\">Monto pendiente</th><th class=\"num\">Cuotas</th></tr></thead>");
+            builder.Append("<thead><tr><th>Alumno</th><th>DNI / Documento</th><th>Celular</th><th>Correo</th><th>Institucion de procedencia</th>");
+            if (cursoPreguntaPresencialidad)
+            {
+                builder.Append("<th>Asistencia presencial primer dia</th>");
+            }
+            builder.AppendLine("<th>Fecha registro</th><th>Ultimo pago</th><th>Estado reporte</th><th class=\"num\">Monto pagado</th><th class=\"num\">Monto pendiente</th><th class=\"num\">Cuotas</th></tr></thead>");
             builder.AppendLine("<tbody>");
 
             if (detalle.Items.Count == 0)
             {
-                builder.AppendLine("<tr><td colspan=\"11\">No hay inscritos que coincidan con el filtro seleccionado.</td></tr>");
+                builder.AppendLine($"<tr><td colspan=\"{(cursoPreguntaPresencialidad ? 12 : 11)}\">No hay inscritos que coincidan con el filtro seleccionado.</td></tr>");
             }
             else
             {
@@ -765,6 +851,10 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     builder.AppendLine($"<td>{Html(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)}</td>");
                     builder.AppendLine($"<td>{Html(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)}</td>");
                     builder.AppendLine($"<td>{Html(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)}</td>");
+                    if (cursoPreguntaPresencialidad)
+                    {
+                        builder.AppendLine($"<td>{Html(item.AsistiraPresencialPrimerDiaEtiqueta)}</td>");
+                    }
                     builder.AppendLine($"<td>{item.FechaRegistro:dd/MM/yyyy HH:mm}</td>");
                     builder.AppendLine($"<td>{(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")}</td>");
                     builder.AppendLine($"<td>{Html(item.EstadoReportePagoEtiqueta)}</td>");
@@ -783,6 +873,7 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
         private static string ConstruirReporteInscritosGeneralHtmlExportable(ReporteInscritosCursoDetalle detalle, IReadOnlyList<ReporteInscritoGeneralItem> items)
         {
             var resumen = detalle.Resumen;
+            var cursoTieneCobro = detalle.CursoTieneCobro;
             var builder = new StringBuilder();
             builder.AppendLine("<!DOCTYPE html>");
             builder.AppendLine("<html><head><meta charset=\"utf-8\">");
@@ -798,12 +889,28 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             builder.AppendLine($"<p><strong>Curso:</strong> {Html(resumen.NombreCurso)}</p>");
             builder.AppendLine($"<p><strong>Generado:</strong> {DateTime.Now:dd/MM/yyyy HH:mm}</p>");
             builder.AppendLine("<table>");
-            builder.AppendLine("<thead><tr><th>ID inscripcion</th><th>Curso</th><th>Estado reporte</th><th>Tipo participante</th><th>Tipo documento</th><th>Documento</th><th>Nombres</th><th>Apellidos</th><th>Correo</th><th>Codigo pais</th><th>Celular</th><th>Pais</th><th>Region</th><th>Profesion</th><th>Especialidad</th><th>Institucion</th><th>Institucion procedencia</th><th>Condicion INSNSB</th><th>Medio comunicacion</th><th>Fecha registro</th><th class=\"num\">Costo final</th><th class=\"num\">Nro cuotas</th><th class=\"num\">Cuotas pagadas</th><th class=\"num\">Cuotas pendientes</th><th class=\"num\">Monto pagado</th><th class=\"num\">Monto pendiente</th><th class=\"num\">Monto total</th><th>Ultimo pago</th></tr></thead>");
+            builder.Append("<thead><tr><th>ID inscripcion</th><th>Curso</th>");
+            if (cursoTieneCobro)
+            {
+                builder.Append("<th>Estado reporte</th>");
+            }
+            builder.Append("<th>Tipo participante</th><th>Tipo documento</th><th>Documento</th><th>Nombres</th><th>Apellidos</th><th>Correo</th><th>Codigo pais</th><th>Celular</th><th>Pais</th><th>Region</th><th>Profesion</th><th>Especialidad</th><th>Institucion</th><th>Institucion procedencia</th><th>Condicion INSNSB</th><th>Medio comunicacion</th>");
+            if (resumen.SolicitaConfirmacionPresencialPrimerDia)
+            {
+                builder.Append("<th>Asistencia presencial primer dia</th>");
+            }
+            builder.Append("<th>Fecha registro</th>");
+            if (cursoTieneCobro)
+            {
+                builder.Append("<th class=\"num\">Costo final</th><th class=\"num\">Nro cuotas</th><th class=\"num\">Cuotas pagadas</th><th class=\"num\">Cuotas pendientes</th><th class=\"num\">Monto pagado</th><th class=\"num\">Monto pendiente</th><th class=\"num\">Monto total</th><th>Ultimo pago</th>");
+            }
+            builder.AppendLine("</tr></thead>");
             builder.AppendLine("<tbody>");
 
             if (items.Count == 0)
             {
-                builder.AppendLine("<tr><td colspan=\"28\">No hay inscritos para este curso.</td></tr>");
+                var columnasBase = resumen.SolicitaConfirmacionPresencialPrimerDia ? 21 : 20;
+                builder.AppendLine($"<tr><td colspan=\"{(cursoTieneCobro ? columnasBase + 8 : columnasBase)}\">No hay inscritos para este curso.</td></tr>");
             }
             else
             {
@@ -812,7 +919,10 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     builder.AppendLine("<tr>");
                     builder.AppendLine($"<td>{item.IdInscripcion}</td>");
                     builder.AppendLine($"<td>{Html(item.NombreCurso)}</td>");
-                    builder.AppendLine($"<td>{Html(item.EstadoReportePagoEtiqueta)}</td>");
+                    if (cursoTieneCobro)
+                    {
+                        builder.AppendLine($"<td>{Html(item.EstadoReportePagoEtiqueta)}</td>");
+                    }
                     builder.AppendLine($"<td>{Html(item.TipoParticipante)}</td>");
                     builder.AppendLine($"<td>{Html(item.TipoDocumento)}</td>");
                     builder.AppendLine($"<td>{Html(item.NumeroDocumento)}</td>");
@@ -829,15 +939,22 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     builder.AppendLine($"<td>{Html(item.InstitucionProcedencia)}</td>");
                     builder.AppendLine($"<td>{Html(item.CondicionLaboralInsnsb)}</td>");
                     builder.AppendLine($"<td>{Html(item.MedioComunicacion)}</td>");
+                    if (resumen.SolicitaConfirmacionPresencialPrimerDia)
+                    {
+                        builder.AppendLine($"<td>{Html(item.AsistiraPresencialPrimerDiaEtiqueta)}</td>");
+                    }
                     builder.AppendLine($"<td>{item.FechaRegistro:dd/MM/yyyy HH:mm}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.CostoFinal:N2}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.NumeroCuotas}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.CuotasPagadas}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.CuotasPendientes}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.MontoPagado:N2}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.MontoPendiente:N2}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.MontoTotal:N2}</td>");
-                    builder.AppendLine($"<td>{(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")}</td>");
+                    if (cursoTieneCobro)
+                    {
+                        builder.AppendLine($"<td class=\"num\">{item.CostoFinal:N2}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.NumeroCuotas}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.CuotasPagadas}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.CuotasPendientes}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.MontoPagado:N2}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.MontoPendiente:N2}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.MontoTotal:N2}</td>");
+                        builder.AppendLine($"<td>{(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")}</td>");
+                    }
                     builder.AppendLine("</tr>");
                 }
             }
@@ -847,22 +964,34 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
             return builder.ToString();
         }
 
-        private static void AppendReporteTable(StringBuilder builder, string titulo, IReadOnlyList<ReporteInscritosAgrupacionItem> items, bool mostrarSinCobro)
+        private static void AppendReporteTable(StringBuilder builder, string titulo, IReadOnlyList<ReporteInscritosAgrupacionItem> items, bool mostrarSinCobro, bool cursoTieneCobro)
         {
             builder.AppendLine($"<h2>{Html(titulo)}</h2>");
             builder.AppendLine("<table>");
-            builder.Append("<thead><tr><th>Categoria</th><th class=\"num\">Total</th><th class=\"num\">Inscritos</th><th class=\"num\">Pre-inscritos</th><th class=\"num\">Internos</th><th class=\"num\">Externos</th><th class=\"num\">Pagado</th><th class=\"num\">Pagado parcial</th><th class=\"num\">Pendiente</th>");
-            if (mostrarSinCobro)
+            builder.Append("<thead><tr><th>Categoria</th><th class=\"num\">Total</th>");
+            if (cursoTieneCobro)
             {
-                builder.Append("<th class=\"num\">Sin cobro</th>");
+                builder.Append("<th class=\"num\">Inscritos</th><th class=\"num\">Pre-inscritos</th>");
             }
 
-            builder.AppendLine("<th class=\"num\">Monto pagado</th><th class=\"num\">Deuda</th><th class=\"num\">Total S/</th></tr></thead>");
+            builder.Append("<th class=\"num\">Internos</th><th class=\"num\">Externos</th>");
+            if (cursoTieneCobro)
+            {
+                builder.Append("<th class=\"num\">Pagado</th><th class=\"num\">Pagado parcial</th><th class=\"num\">Pendiente</th>");
+                if (mostrarSinCobro)
+                {
+                    builder.Append("<th class=\"num\">Sin cobro</th>");
+                }
+
+                builder.Append("<th class=\"num\">Monto pagado</th><th class=\"num\">Deuda con pago</th><th class=\"num\">Comprometido S/</th>");
+            }
+
+            builder.AppendLine("</tr></thead>");
             builder.AppendLine("<tbody>");
 
             if (items.Count == 0)
             {
-                builder.AppendLine($"<tr><td colspan=\"{(mostrarSinCobro ? 13 : 12)}\">No hay datos para mostrar.</td></tr>");
+                builder.AppendLine($"<tr><td colspan=\"{(cursoTieneCobro ? (mostrarSinCobro ? 13 : 12) : 4)}\">No hay datos para mostrar.</td></tr>");
             }
             else
             {
@@ -871,21 +1000,28 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                     builder.AppendLine("<tr>");
                     builder.AppendLine($"<td>{Html(item.Categoria)}</td>");
                     builder.AppendLine($"<td class=\"num\">{item.TotalInscritos}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Pagados + item.PagadosParciales}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Pendientes}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Internos}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Externos}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Pagados}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.PagadosParciales}</td>");
-                    builder.AppendLine($"<td class=\"num\">{item.Pendientes}</td>");
-                    if (mostrarSinCobro)
+                    if (cursoTieneCobro)
                     {
-                        builder.AppendLine($"<td class=\"num\">{item.SinCobro}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.Pagados + item.PagadosParciales}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.Pendientes}</td>");
                     }
 
-                    builder.AppendLine($"<td class=\"num\">{Money(item.MontoPagado)}</td>");
-                    builder.AppendLine($"<td class=\"num\">{Money(item.MontoDeuda)}</td>");
-                    builder.AppendLine($"<td class=\"num\">{Money(item.MontoTotal)}</td>");
+                    builder.AppendLine($"<td class=\"num\">{item.Internos}</td>");
+                    builder.AppendLine($"<td class=\"num\">{item.Externos}</td>");
+                    if (cursoTieneCobro)
+                    {
+                        builder.AppendLine($"<td class=\"num\">{item.Pagados}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.PagadosParciales}</td>");
+                        builder.AppendLine($"<td class=\"num\">{item.Pendientes}</td>");
+                        if (mostrarSinCobro)
+                        {
+                            builder.AppendLine($"<td class=\"num\">{item.SinCobro}</td>");
+                        }
+
+                        builder.AppendLine($"<td class=\"num\">{Money(item.MontoPagado)}</td>");
+                        builder.AppendLine($"<td class=\"num\">{Money(item.MontoDeuda)}</td>");
+                        builder.AppendLine($"<td class=\"num\">{Money(item.MontoTotal)}</td>");
+                    }
                     builder.AppendLine("</tr>");
                 }
             }
@@ -1080,7 +1216,8 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 UrlProgramaWeb = curso.UrlProgramaWeb,
                 UrlBannerWeb = curso.UrlBannerWeb,
                 VisibleEnFormulario = NormalizarSiNo(curso.VisibleEnFormulario, "Si"),
-                RestriccionInscripcionUnica = curso.RestriccionInscripcionUnica ? "Si" : "No"
+                RestriccionInscripcionUnica = curso.RestriccionInscripcionUnica ? "Si" : "No",
+                SolicitaConfirmacionPresencialPrimerDia = curso.SolicitaConfirmacionPresencialPrimerDia ? "Si" : "No"
             };
         }
 
@@ -1107,7 +1244,8 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 CelularContactoActividad = input.CelularContactoActividad?.Trim(),
                 UrlBannerWeb = input.UrlBannerWeb?.Trim(),
                 UrlProgramaWeb = input.UrlProgramaWeb?.Trim(),
-                RestriccionInscripcionUnica = string.Equals(input.RestriccionInscripcionUnica, "Si", StringComparison.OrdinalIgnoreCase)
+                RestriccionInscripcionUnica = string.Equals(input.RestriccionInscripcionUnica, "Si", StringComparison.OrdinalIgnoreCase),
+                SolicitaConfirmacionPresencialPrimerDia = string.Equals(input.SolicitaConfirmacionPresencialPrimerDia, "Si", StringComparison.OrdinalIgnoreCase)
             };
         }
 
@@ -1149,9 +1287,15 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
 
         private async Task<bool> SincronizarPagosPendientesIzipayAsync(AdminSeguimientoPagosResumen seguimientoPagos)
         {
+            var resultado = await SincronizarPagosPendientesIzipayConResumenAsync(seguimientoPagos);
+            return resultado.HuboCambiosVisibles;
+        }
+
+        private async Task<(int Consultados, int PagosDetectados, int Fallidos, bool HuboCambiosVisibles)> SincronizarPagosPendientesIzipayConResumenAsync(AdminSeguimientoPagosResumen seguimientoPagos)
+        {
             if (!_pagoIzipayService.EstaConfigurado)
             {
-                return false;
+                return (0, 0, 0, false);
             }
 
             var idsPendientes = seguimientoPagos.Alumnos
@@ -1164,26 +1308,46 @@ namespace CURSO_INTERCULTURALIDAD.Controllers
                 .Distinct()
                 .ToList();
 
+            return await SincronizarPagosIzipayPorIdsAsync(idsPendientes);
+        }
+
+        private async Task<(int Consultados, int PagosDetectados, int Fallidos, bool HuboCambiosVisibles)> SincronizarPagosIzipayPorIdsAsync(IReadOnlyList<long> idsPendientes)
+        {
+            if (!_pagoIzipayService.EstaConfigurado || idsPendientes.Count == 0)
+            {
+                return (0, 0, 0, false);
+            }
+
             var huboCambiosVisibles = false;
+            var consultados = 0;
+            var pagosDetectados = 0;
+            var fallidos = 0;
             foreach (var idPagoIzipay in idsPendientes)
             {
+                consultados++;
                 var estado = await _pagoIzipayService.ConsultarEstadoAsync(idPagoIzipay);
                 if (!estado.Exitoso)
                 {
+                    fallidos++;
                     _logger.LogWarning("IziPay no pudo consultar el estado del pago {IdPagoIzipay}: {Mensaje}", idPagoIzipay, estado.Mensaje);
                     continue;
                 }
 
-                await _cursoRepository.ActualizarEstadoPagoIzipayAsync(estado);
-                huboCambiosVisibles = huboCambiosVisibles
-                    || estado.YaPago
+                await _cursoRepository.ActualizarEstadoPagoIzipayDirectoAsync(estado);
+                var pagoDetectado = estado.YaPago
                     || string.Equals(estado.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(estado.Estado, "CON COMPROBANTE", StringComparison.OrdinalIgnoreCase)
                     || !string.IsNullOrWhiteSpace(estado.NumeroComprobante)
                     || !string.IsNullOrWhiteSpace(estado.UrlComprobantePdf);
+
+                if (pagoDetectado)
+                {
+                    pagosDetectados++;
+                    huboCambiosVisibles = true;
+                }
             }
 
-            return huboCambiosVisibles;
+            return (consultados, pagosDetectados, fallidos, huboCambiosVisibles);
         }
     }
 }

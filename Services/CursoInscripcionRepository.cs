@@ -72,6 +72,7 @@ SET nombre_actividad = @NombreActividad,
     url_banner_web = @UrlBannerWeb,
     url_programa_web = @UrlProgramaWeb,
     restriccion_inscripcion_unica = @RestriccionInscripcionUnica,
+    solicita_confirmacion_presencial_primer_dia = @SolicitaConfirmacionPresencialPrimerDia,
     visible_en_formulario = @VisibleEnFormulario,
     fue_pagado_historico = CASE
         WHEN UPPER(LTRIM(RTRIM(ISNULL(fue_pagado_historico, '')))) = 'SI' THEN 'Si'
@@ -115,6 +116,7 @@ SELECT @@ROWCOUNT;",
             command.Parameters.Add(new SqlParameter("@UrlBannerWeb", SqlDbType.NVarChar, 1000) { Value = DbValue(NormalizarTexto(input.UrlBannerWeb, uppercase: false)) });
             command.Parameters.Add(new SqlParameter("@UrlProgramaWeb", SqlDbType.NVarChar, 1000) { Value = DbValue(NormalizarTexto(input.UrlProgramaWeb, uppercase: false)) });
             command.Parameters.Add(new SqlParameter("@RestriccionInscripcionUnica", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.RestriccionInscripcionUnica, "No") });
+            command.Parameters.Add(new SqlParameter("@SolicitaConfirmacionPresencialPrimerDia", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.SolicitaConfirmacionPresencialPrimerDia, "No") });
             command.Parameters.Add(new SqlParameter("@VisibleEnFormulario", SqlDbType.NVarChar, 2) { Value = NormalizarSiNo(input.VisibleEnFormulario, "Si") });
 
             var affectedRows = Convert.ToInt32(await command.ExecuteScalarAsync());
@@ -145,7 +147,8 @@ SELECT @@ROWCOUNT;",
                     };
                 }
 
-                if (curso.RestriccionInscripcionUnica &&
+                var validarDuplicados = await DebeValidarInscripcionDuplicadaAsync(input.CursoId, connection, transaction);
+                if (validarDuplicados &&
                     await ExisteInscripcionDuplicadaAsync(input.CursoId, input.NumeroDocumento, input.Correo, connection, transaction))
                 {
                     await transaction.RollbackAsync();
@@ -156,8 +159,12 @@ SELECT @@ROWCOUNT;",
                     };
                 }
 
+                var costoFinal = input.CostoFinal ?? PagoCursoHelper.CalcularCostoFinal(curso, EsInstitucionInsnsb(input.TipoInstitucion));
+                var requiereCodigoInsnsb = EsInstitucionInsnsb(input.TipoInstitucion)
+                    && PagoCursoHelper.RequiereCodigoInsnsb(curso, costoFinal);
+
                 long? codigoId = null;
-                if (EsInstitucionInsnsb(input.TipoInstitucion))
+                if (requiereCodigoInsnsb)
                 {
                     codigoId = await ObtenerCodigoDisponibleAsync(
                         input.CursoId,
@@ -191,7 +198,6 @@ SELECT @@ROWCOUNT;",
 
                 await transaction.CommitAsync();
 
-                var costoFinal = input.CostoFinal ?? 0m;
                 return new ResultadoRegistroInscripcion
                 {
                     Exito = true,
@@ -201,7 +207,7 @@ SELECT @@ROWCOUNT;",
                     CostoFinal = costoFinal,
                     NumeroCuotas = input.NumeroCuotas ?? 0,
                     EstadoPagoGeneral = cuotas.Count == 0 ? "PAGADO" : "PENDIENTE",
-                    RequierePago = costoFinal > 0m
+                    RequierePago = PagoCursoHelper.RequierePago(curso, costoFinal)
                 };
             }
             catch (Exception ex)
@@ -318,6 +324,11 @@ SELECT @@ROWCOUNT;",
                         continue;
                     }
 
+                    var idPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null;
+                    var urlPagoIzipay = ResolverUrlResumenPagoIzipay(
+                        idPagoIzipay,
+                        HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null);
+
                     cursoPago.Cuotas.Add(new CuotaPagoProgramada
                     {
                         NumeroCuota = reader.GetInt32(reader.GetOrdinal("numero_cuota")),
@@ -326,8 +337,8 @@ SELECT @@ROWCOUNT;",
                         Estado = GetNullableString(reader, "estado") ?? "PENDIENTE",
                         FechaPagoReal = GetNullableDateTime(reader, "fecha_pago_real"),
                         TokenPagoPasarela = GetNullableString(reader, "token_pago_pasarela"),
-                        IdPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null,
-                        UrlPagoIzipay = HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null,
+                        IdPagoIzipay = idPagoIzipay,
+                        UrlPagoIzipay = urlPagoIzipay,
                         EstadoIzipay = HasColumn(reader, "estado_izipay") ? GetNullableString(reader, "estado_izipay") : null,
                         CodigoAutorizacionIzipay = HasColumn(reader, "codigo_autorizacion_izipay") ? GetNullableString(reader, "codigo_autorizacion_izipay") : null,
                         NumeroComprobanteIzipay = HasColumn(reader, "numero_comprobante_izipay") ? GetNullableString(reader, "numero_comprobante_izipay") : null,
@@ -458,6 +469,11 @@ SELECT @@ROWCOUNT;",
                         continue;
                     }
 
+                    var idPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null;
+                    var urlPagoIzipay = ResolverUrlResumenPagoIzipay(
+                        idPagoIzipay,
+                        HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null);
+
                     alumno.Cuotas.Add(new CuotaPagoProgramada
                     {
                         NumeroCuota = reader.GetInt32(reader.GetOrdinal("numero_cuota")),
@@ -466,8 +482,8 @@ SELECT @@ROWCOUNT;",
                         Estado = GetNullableString(reader, "estado") ?? "PENDIENTE",
                         FechaPagoReal = GetNullableDateTime(reader, "fecha_pago_real"),
                         TokenPagoPasarela = GetNullableString(reader, "token_pago_pasarela"),
-                        IdPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null,
-                        UrlPagoIzipay = HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null,
+                        IdPagoIzipay = idPagoIzipay,
+                        UrlPagoIzipay = urlPagoIzipay,
                         EstadoIzipay = HasColumn(reader, "estado_izipay") ? GetNullableString(reader, "estado_izipay") : null,
                         CodigoAutorizacionIzipay = HasColumn(reader, "codigo_autorizacion_izipay") ? GetNullableString(reader, "codigo_autorizacion_izipay") : null,
                         NumeroComprobanteIzipay = HasColumn(reader, "numero_comprobante_izipay") ? GetNullableString(reader, "numero_comprobante_izipay") : null,
@@ -500,7 +516,7 @@ SELECT @@ROWCOUNT;",
             await using var connection = CreateConnection();
             await connection.OpenAsync();
 
-            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_curso", connection);
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_curso_20260521", connection);
             command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -519,6 +535,17 @@ SELECT @@ROWCOUNT;",
                     PagadosParciales = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("pagados_parciales"))),
                     Pendientes = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("pendientes"))),
                     SinCobro = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("sin_cobro"))),
+                    SolicitaConfirmacionPresencialPrimerDia = HasColumn(reader, "solicita_confirmacion_presencial_primer_dia") &&
+                        string.Equals(GetNullableString(reader, "solicita_confirmacion_presencial_primer_dia"), "Si", StringComparison.OrdinalIgnoreCase),
+                    AsistiranPresencialPrimerDia = HasColumn(reader, "asistiran_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("asistiran_presencial_primer_dia")))
+                        : 0,
+                    NoAsistiranPresencialPrimerDia = HasColumn(reader, "no_asistiran_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("no_asistiran_presencial_primer_dia")))
+                        : 0,
+                    SinRespuestaPresencialPrimerDia = HasColumn(reader, "sin_respuesta_presencial_primer_dia")
+                        ? Convert.ToInt32(reader.GetValue(reader.GetOrdinal("sin_respuesta_presencial_primer_dia")))
+                        : 0,
                     MontoPagado = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_pagado"))),
                     MontoDeuda = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_deuda"))),
                     MontoTotal = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("monto_total")))
@@ -565,7 +592,7 @@ SELECT @@ROWCOUNT;",
             await using var connection = CreateConnection();
             await connection.OpenAsync();
 
-            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_general", connection);
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_obtener_reporte_inscritos_general_20260521", connection);
             command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
 
             var items = new List<ReporteInscritoGeneralItem>();
@@ -595,6 +622,9 @@ SELECT @@ROWCOUNT;",
                     InstitucionProcedencia = GetNullableString(reader, "institucion_procedencia") ?? string.Empty,
                     CondicionLaboralInsnsb = GetNullableString(reader, "condicion_laboral_insnsb") ?? string.Empty,
                     MedioComunicacion = GetNullableString(reader, "medio_comunicacion") ?? string.Empty,
+                    AsistiraPresencialPrimerDia = HasColumn(reader, "asistira_presencial_primer_dia") && !reader.IsDBNull(reader.GetOrdinal("asistira_presencial_primer_dia"))
+                        ? reader.GetBoolean(reader.GetOrdinal("asistira_presencial_primer_dia"))
+                        : null,
                     FechaRegistro = reader.GetDateTime(reader.GetOrdinal("fecha_registro")),
                     CostoFinal = Convert.ToDecimal(reader.GetValue(reader.GetOrdinal("costo_final"))),
                     NumeroCuotas = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("numero_cuotas"))),
@@ -857,11 +887,37 @@ WHERE d.id_pago_izipay = @IdPagoIzipay;",
             return MapPagoDemo(reader, token);
         }
 
-        public async Task GuardarPagoIzipayAsync(string token, RespuestaCrearPagoIzipay resultado)
+        public async Task<ReservaPagoIzipayResultado> ReservarCreacionPagoIzipayAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new ReservaPagoIzipayResultado();
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync();
+
+            await using var command = CreateStoredProcedure("dbo.sp_docencia_reservar_pago_izipay_por_token", connection);
+            command.Parameters.Add(new SqlParameter("@TokenPagoPasarela", SqlDbType.VarChar, 120) { Value = token.Trim() });
+
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                return new ReservaPagoIzipayResultado();
+            }
+
+            return new ReservaPagoIzipayResultado
+            {
+                EstadoReserva = GetNullableString(reader, "resultado_reserva") ?? "NO_DISPONIBLE",
+                Pago = MapPagoDemo(reader, token.Trim())
+            };
+        }
+
+        public async Task<bool> GuardarPagoIzipayAsync(string token, RespuestaCrearPagoIzipay resultado)
         {
             if (string.IsNullOrWhiteSpace(token) || !resultado.IdPagoIziPay.HasValue)
             {
-                return;
+                return false;
             }
 
             await using var connection = CreateConnection();
@@ -873,7 +929,185 @@ WHERE d.id_pago_izipay = @IdPagoIzipay;",
             command.Parameters.Add(new SqlParameter("@UrlPago", SqlDbType.NVarChar, 500) { Value = DbValue(resultado.UrlPago) });
             command.Parameters.Add(new SqlParameter("@Mensaje", SqlDbType.NVarChar, 500) { Value = DbValue(resultado.Mensaje) });
 
-            await command.ExecuteNonQueryAsync();
+            var result = await command.ExecuteScalarAsync();
+            return result is not null && result != DBNull.Value && Convert.ToInt32(result) > 0;
+        }
+
+        public async Task<IReadOnlyList<long>> ObtenerIdsPagoIzipayPendientesPorCursoAsync(long cursoId)
+        {
+            await using var connection = CreateConnection();
+            await connection.OpenAsync();
+
+            var tieneIdPagoIzipay = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "id_pago_izipay", transaction: null);
+            if (!tieneIdPagoIzipay)
+            {
+                return [];
+            }
+
+            var tieneNumeroComprobante = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "numero_comprobante_izipay", transaction: null);
+            var tieneUrlComprobante = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "url_comprobante_pdf_izipay", transaction: null);
+
+            var condiciones = new List<string>
+            {
+                "UPPER(LTRIM(RTRIM(ISNULL(dc.estado, 'PENDIENTE')))) <> 'PAGADO'"
+            };
+
+            if (tieneNumeroComprobante)
+            {
+                condiciones.Add("NULLIF(LTRIM(RTRIM(ISNULL(dc.numero_comprobante_izipay, ''))), '') IS NULL");
+            }
+
+            if (tieneUrlComprobante)
+            {
+                condiciones.Add("NULLIF(LTRIM(RTRIM(ISNULL(dc.url_comprobante_pdf_izipay, ''))), '') IS NULL");
+            }
+
+            await using var command = CreateTextCommand($@"
+SELECT DISTINCT dc.id_pago_izipay
+FROM dbo.deudas_cuotas dc
+INNER JOIN dbo.inscripciones i
+    ON i.id_inscripcion = dc.id_inscripcion
+WHERE i.code_curso = @CursoId
+  AND dc.id_pago_izipay IS NOT NULL
+  AND ({string.Join($"{Environment.NewLine}       OR ", condiciones)})
+ORDER BY dc.id_pago_izipay;",
+                connection);
+
+            command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
+
+            var ids = new List<long>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0))
+                {
+                    ids.Add(Convert.ToInt64(reader.GetValue(0)));
+                }
+            }
+
+            return ids;
+        }
+
+        public async Task<string?> ActualizarEstadoPagoIzipayDirectoAsync(RespuestaEstadoPagoIzipay estadoPago)
+        {
+            if (!estadoPago.IdPagoIziPay.HasValue)
+            {
+                return null;
+            }
+
+            await using var connection = CreateConnection();
+            await connection.OpenAsync();
+
+            var tieneIdPagoIzipay = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "id_pago_izipay", transaction: null);
+            if (!tieneIdPagoIzipay)
+            {
+                return null;
+            }
+
+            var tieneEstadoIzipay = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "estado_izipay", transaction: null);
+            var tieneCipIzipay = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "cip_izipay", transaction: null);
+            var tieneNumeroOrden = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "numero_orden_izipay", transaction: null);
+            var tieneNumeroTransaccion = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "numero_transaccion_izipay", transaction: null);
+            var tieneFechaCreacion = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "fecha_creacion_izipay", transaction: null);
+            var tieneFechaUltimaConsulta = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "fecha_ultima_consulta_izipay", transaction: null);
+            var tieneFechaConsulta = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "fecha_consulta_izipay", transaction: null);
+            var tieneUpdatedAt = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "updated_at", transaction: null);
+            var tieneCodigoAutorizacion = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "codigo_autorizacion_izipay", transaction: null);
+            var tieneNumeroComprobante = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "numero_comprobante_izipay", transaction: null);
+            var tieneUrlComprobante = await ColumnExistsAsync(connection, "dbo.deudas_cuotas", "url_comprobante_pdf_izipay", transaction: null);
+            var pagoConfirmado = estadoPago.YaPago
+                || string.Equals(estadoPago.Estado, "PAGADO", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(estadoPago.Estado, "CON COMPROBANTE", StringComparison.OrdinalIgnoreCase);
+
+            var updates = new List<string>();
+
+            if (tieneUpdatedAt)
+            {
+                updates.Add("updated_at = GETDATE()");
+            }
+
+            if (pagoConfirmado)
+            {
+                updates.Add("estado = 'PAGADO'");
+                updates.Add("fecha_pago_real = ISNULL(fecha_pago_real, GETDATE())");
+            }
+
+            if (tieneEstadoIzipay)
+            {
+                updates.Add("estado_izipay = @EstadoIzipay");
+            }
+
+            if (tieneCipIzipay)
+            {
+                updates.Add("cip_izipay = @Cip");
+            }
+
+            if (tieneNumeroOrden)
+            {
+                updates.Add("numero_orden_izipay = @NumeroOrden");
+            }
+
+            if (tieneNumeroTransaccion)
+            {
+                updates.Add("numero_transaccion_izipay = @NumeroTransaccion");
+            }
+
+            if (tieneFechaCreacion)
+            {
+                updates.Add("fecha_creacion_izipay = @FechaCreacion");
+            }
+
+            if (tieneFechaUltimaConsulta)
+            {
+                updates.Add("fecha_ultima_consulta_izipay = GETDATE()");
+            }
+            else if (tieneFechaConsulta)
+            {
+                updates.Add("fecha_consulta_izipay = GETDATE()");
+            }
+
+            if (tieneCodigoAutorizacion)
+            {
+                updates.Add("codigo_autorizacion_izipay = @CodigoAutorizacion");
+            }
+
+            if (tieneNumeroComprobante)
+            {
+                updates.Add("numero_comprobante_izipay = @NumeroComprobante");
+            }
+
+            if (tieneUrlComprobante)
+            {
+                updates.Add("url_comprobante_pdf_izipay = @UrlComprobantePdf");
+            }
+
+            if (updates.Count == 0)
+            {
+                return null;
+            }
+
+            await using var command = CreateTextCommand($@"
+UPDATE dbo.deudas_cuotas
+SET {string.Join($",{Environment.NewLine}    ", updates)}
+WHERE id_pago_izipay = @IdPagoIziPay;
+
+SELECT TOP 1 estado
+FROM dbo.deudas_cuotas
+WHERE id_pago_izipay = @IdPagoIziPay;",
+                connection);
+
+            command.Parameters.Add(new SqlParameter("@IdPagoIziPay", SqlDbType.BigInt) { Value = estadoPago.IdPagoIziPay.Value });
+            command.Parameters.Add(new SqlParameter("@EstadoIzipay", SqlDbType.VarChar, 30) { Value = DbValue(estadoPago.Estado) });
+            command.Parameters.Add(new SqlParameter("@Cip", SqlDbType.NVarChar, 50) { Value = DbValue(estadoPago.Cip) });
+            command.Parameters.Add(new SqlParameter("@NumeroOrden", SqlDbType.NVarChar, 100) { Value = DbValue(estadoPago.NumeroOrden) });
+            command.Parameters.Add(new SqlParameter("@NumeroTransaccion", SqlDbType.NVarChar, 120) { Value = DbValue(estadoPago.NumeroTransaccion) });
+            command.Parameters.Add(new SqlParameter("@FechaCreacion", SqlDbType.DateTime) { Value = DbValue(estadoPago.FechaCreacion) });
+            command.Parameters.Add(new SqlParameter("@CodigoAutorizacion", SqlDbType.NVarChar, 50) { Value = DbValue(estadoPago.CodigoAutorizacion) });
+            command.Parameters.Add(new SqlParameter("@NumeroComprobante", SqlDbType.NVarChar, 50) { Value = DbValue(estadoPago.NumeroComprobante) });
+            command.Parameters.Add(new SqlParameter("@UrlComprobantePdf", SqlDbType.NVarChar, 1000) { Value = DbValue(estadoPago.UrlComprobantePdf) });
+
+            var result = await command.ExecuteScalarAsync();
+            return result is null || result == DBNull.Value ? null : Convert.ToString(result);
         }
 
         public async Task<string?> ActualizarEstadoPagoIzipayAsync(RespuestaEstadoPagoIzipay estadoPago)
@@ -896,7 +1130,7 @@ WHERE d.id_pago_izipay = @IdPagoIzipay;",
             }
             catch (SqlException ex) when (ex.Number == 8144)
             {
-                _logger.LogWarning(ex, "El SP de actualizacion IziPay aun no admite los nuevos campos de comprobante. Se ejecutara modo compatible.");
+                _logger.LogWarning(ex, "El SP de actualizacion IziPay aún no admite los nuevos campos de comprobante. Se ejecutara modo compatible.");
 
                 await using var command = CreateStoredProcedure("dbo.sp_docencia_actualizar_estado_pago_izipay", connection);
                 AgregarParametrosActualizarEstadoPagoIzipay(command, estadoPago, incluirComprobante: false);
@@ -1012,9 +1246,15 @@ END;",
         {
             var tieneVisibleEnFormulario = await ColumnExistsAsync(connection, "dbo.tabla_central", "visible_en_formulario", transaction);
             var tieneFuePagadoHistorico = await ColumnExistsAsync(connection, "dbo.tabla_central", "fue_pagado_historico", transaction);
+            var tieneSolicitaConfirmacionPresencial = await ColumnExistsAsync(connection, "dbo.tabla_central", "solicita_confirmacion_presencial_primer_dia", transaction);
 
             await using var command = CreateTextCommand(
-                ConstruirConsultaCursos(soloPublicos, cursoId.HasValue, tieneVisibleEnFormulario, tieneFuePagadoHistorico),
+                ConstruirConsultaCursos(
+                    soloPublicos,
+                    cursoId.HasValue,
+                    tieneVisibleEnFormulario,
+                    tieneFuePagadoHistorico,
+                    tieneSolicitaConfirmacionPresencial),
                 connection,
                 transaction);
 
@@ -1038,18 +1278,17 @@ END;",
             bool soloPublicos,
             bool filtrarPorCursoId,
             bool tieneVisibleEnFormulario,
-            bool tieneFuePagadoHistorico)
+            bool tieneFuePagadoHistorico,
+            bool tieneSolicitaConfirmacionPresencial)
         {
             const string EsPagadoActual = @"
 (
     UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'SI'
-    OR (
-        tc.se_cobra IS NULL
-        AND (
-            ISNULL(tc.costo_base, 0) > 0
-            OR ISNULL(tc.costo_personal_insnsb, 0) > 0
-        )
-    )
+)";
+
+            const string TieneSeCobraConfigurado = @"
+(
+    UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) IN ('SI', 'NO')
 )";
 
             const string TieneTarifasHistoricas = @"
@@ -1079,8 +1318,7 @@ EXISTS (
 CASE
     WHEN UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'SI' THEN 'Si'
     WHEN UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'NO' THEN 'No'
-    WHEN ISNULL(tc.costo_base, 0) > 0 OR ISNULL(tc.costo_personal_insnsb, 0) > 0 THEN 'Si'
-    ELSE 'No'
+    ELSE NULL
 END";
 
             var visibleExpr = tieneVisibleEnFormulario
@@ -1104,25 +1342,40 @@ CASE
     ELSE 'No'
 END";
 
-            var condicionWhere = soloPublicos
-                ? EsPagadoActual
-                : $@"
-(
-    {EsPagadoActual}
-    OR {TieneTarifasHistoricas}
-    OR {TieneMovimientosPagados}
-    OR {TieneCronogramaPagos}
-    {(tieneFuePagadoHistorico ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.fue_pagado_historico, '')))) = 'SI'" : string.Empty)}
-)";
+            var solicitaConfirmacionPresencialExpr = tieneSolicitaConfirmacionPresencial
+                ? @"
+CASE
+    WHEN UPPER(LTRIM(RTRIM(ISNULL(tc.solicita_confirmacion_presencial_primer_dia, '')))) = 'SI' THEN 'Si'
+    ELSE 'No'
+END"
+                : "N'No'";
 
-            if (soloPublicos && tieneVisibleEnFormulario)
-            {
-                condicionWhere += @"
-AND (
+            var condicionWhere = soloPublicos
+                ? (tieneVisibleEnFormulario
+                    ? @"
+(
+    UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) IN ('SI', 'NO')
+    AND
+    (
     tc.visible_en_formulario IS NULL
     OR UPPER(LTRIM(RTRIM(tc.visible_en_formulario))) = 'SI'
+    )
+)"
+                    : TieneSeCobraConfigurado)
+                : $@"
+(
+    {TieneSeCobraConfigurado}
+    AND
+    (
+        {EsPagadoActual}
+        OR UPPER(LTRIM(RTRIM(ISNULL(tc.se_cobra, '')))) = 'NO'
+        OR {TieneTarifasHistoricas}
+        OR {TieneMovimientosPagados}
+        OR {TieneCronogramaPagos}
+        {(tieneVisibleEnFormulario ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.visible_en_formulario, '')))) = 'SI'" : string.Empty)}
+        {(tieneFuePagadoHistorico ? "OR UPPER(LTRIM(RTRIM(ISNULL(tc.fue_pagado_historico, '')))) = 'SI'" : string.Empty)}
+    )
 )";
-            }
 
             if (filtrarPorCursoId)
             {
@@ -1155,7 +1408,8 @@ SELECT
     tc.celular_contacto_actividad,
     tc.url_banner_web,
     tc.url_programa_web,
-    tc.restriccion_inscripcion_unica
+    tc.restriccion_inscripcion_unica,
+    {solicitaConfirmacionPresencialExpr} AS solicita_confirmacion_presencial_primer_dia
 FROM dbo.tabla_central tc
 WHERE {condicionWhere}
 ORDER BY tc.id_actividad DESC;";
@@ -1205,7 +1459,12 @@ ORDER BY tc.id_actividad DESC;";
                 RestriccionInscripcionUnica = string.Equals(
                     GetNullableString(reader, "restriccion_inscripcion_unica"),
                     "Si",
-                    StringComparison.OrdinalIgnoreCase)
+                    StringComparison.OrdinalIgnoreCase),
+                SolicitaConfirmacionPresencialPrimerDia = HasColumn(reader, "solicita_confirmacion_presencial_primer_dia") &&
+                    string.Equals(
+                        GetNullableString(reader, "solicita_confirmacion_presencial_primer_dia"),
+                        "Si",
+                        StringComparison.OrdinalIgnoreCase)
             };
         }
 
@@ -1229,6 +1488,27 @@ ORDER BY tc.id_actividad DESC;";
 
             var result = await command.ExecuteScalarAsync();
             return result is not null && Convert.ToInt32(result) == 1;
+        }
+
+        private static async Task<bool> DebeValidarInscripcionDuplicadaAsync(
+            long cursoId,
+            SqlConnection connection,
+            SqlTransaction transaction)
+        {
+            await using var command = CreateTextCommand(@"
+SELECT CASE
+    WHEN UPPER(LTRIM(RTRIM(ISNULL(restriccion_inscripcion_unica, 'Si')))) = 'NO' THEN 0
+    ELSE 1
+END
+FROM dbo.tabla_central
+WHERE id_actividad = @CursoId;",
+                connection,
+                transaction);
+
+            command.Parameters.Add(new SqlParameter("@CursoId", SqlDbType.BigInt) { Value = cursoId });
+
+            var result = await command.ExecuteScalarAsync();
+            return result is null || Convert.ToInt32(result) == 1;
         }
 
         private static async Task<long?> ObtenerCodigoDisponibleAsync(
@@ -1291,6 +1571,7 @@ ORDER BY tc.id_actividad DESC;";
             command.Parameters.Add(new SqlParameter("@MedioComunicacion", SqlDbType.NVarChar, -1) { Value = NormalizarTexto(input.MedioComunicacion, uppercase: true) });
             command.Parameters.Add(new SqlParameter("@OtroMedio", SqlDbType.NVarChar, -1) { Value = DbValue(NormalizarTexto(input.OtroMedioComunicacion, uppercase: true)) });
             command.Parameters.Add(new SqlParameter("@Autoriza", SqlDbType.BigInt) { Value = input.AceptaTratamientoDatos ? 1 : 0 });
+            command.Parameters.Add(new SqlParameter("@AsistiraPresencialPrimerDia", SqlDbType.Bit) { Value = DbValue(input.AsistiraPresencialPrimerDia) });
             command.Parameters.Add(new SqlParameter("@CostoFinal", SqlDbType.Decimal) { Precision = 10, Scale = 2, Value = input.CostoFinal ?? 0m });
             command.Parameters.Add(new SqlParameter("@NumeroCuotas", SqlDbType.Int) { Value = input.NumeroCuotas ?? 0 });
 
@@ -1562,8 +1843,42 @@ ORDER BY tc.id_actividad DESC;";
             return false;
         }
 
-        private static PagoDemoViewModel MapPagoDemo(SqlDataReader reader, string token)
+        private string? ResolverUrlResumenPagoIzipay(long? idPagoIzipay, string? urlPagoIzipay)
         {
+            if (!string.IsNullOrWhiteSpace(urlPagoIzipay))
+            {
+                return urlPagoIzipay.Trim();
+            }
+
+            if (!idPagoIzipay.HasValue || idPagoIzipay.Value <= 0)
+            {
+                return null;
+            }
+
+            var crearUrl = (_configuration["PagoIzipay:CrearPagoUrl"] ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(crearUrl))
+            {
+                return null;
+            }
+
+            const string apiCrearSegment = "/api/pagoizipay/crear";
+            var index = crearUrl.LastIndexOf(apiCrearSegment, StringComparison.OrdinalIgnoreCase);
+            var baseUrl = index >= 0
+                ? crearUrl[..index]
+                : crearUrl.EndsWith("/crear", StringComparison.OrdinalIgnoreCase)
+                    ? crearUrl[..^"/crear".Length]
+                    : crearUrl.TrimEnd('/');
+
+            return $"{baseUrl.TrimEnd('/')}/PagoIziPayViews/ResumenPago?idPagoIziPay={idPagoIzipay.Value}";
+        }
+
+        private PagoDemoViewModel MapPagoDemo(SqlDataReader reader, string token)
+        {
+            var idPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null;
+            var urlPagoIzipay = ResolverUrlResumenPagoIzipay(
+                idPagoIzipay,
+                HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null);
+
             return new PagoDemoViewModel
             {
                 IdInscripcion = reader.GetInt64(reader.GetOrdinal("id_inscripcion")),
@@ -1588,8 +1903,8 @@ ORDER BY tc.id_actividad DESC;";
                 Estado = GetNullableString(reader, "estado") ?? "PENDIENTE",
                 FechaPagoReal = GetNullableDateTime(reader, "fecha_pago_real"),
                 Token = token,
-                IdPagoIzipay = HasColumn(reader, "id_pago_izipay") ? GetNullableInt64(reader, "id_pago_izipay") : null,
-                UrlPagoIzipay = HasColumn(reader, "url_pago_izipay") ? GetNullableString(reader, "url_pago_izipay") : null,
+                IdPagoIzipay = idPagoIzipay,
+                UrlPagoIzipay = urlPagoIzipay,
                 EstadoIzipay = HasColumn(reader, "estado_izipay") ? GetNullableString(reader, "estado_izipay") : null,
                 CodigoAutorizacionIzipay = HasColumn(reader, "codigo_autorizacion_izipay") ? GetNullableString(reader, "codigo_autorizacion_izipay") : null,
                 NumeroComprobanteIzipay = HasColumn(reader, "numero_comprobante_izipay") ? GetNullableString(reader, "numero_comprobante_izipay") : null,

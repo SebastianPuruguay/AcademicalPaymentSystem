@@ -45,6 +45,7 @@
     else
     {
         var mostrarSinCobro = Model.Detalle.SinCobro > 0;
+        var cursoPreguntaPresencialidad = Model.Detalle.SolicitaConfirmacionPresencialPrimerDia;
 
         <h1>Reporte de estado de pagos por curso</h1>
         <p><strong>Curso:</strong> @(string.IsNullOrWhiteSpace(Model.Detalle.NombreCurso) ? "Curso seleccionado" : Model.Detalle.NombreCurso)</p>
@@ -61,9 +62,15 @@
             {
                 <div><span>Sin cobro</span><strong>@Model.Detalle.SinCobro</strong></div>
             }
+            @if (cursoPreguntaPresencialidad)
+            {
+                <div><span>Asistiran presencialmente</span><strong>@Model.Detalle.AsistiranPresencialPrimerDia</strong></div>
+                <div><span>No asistiran presencialmente</span><strong>@Model.Detalle.NoAsistiranPresencialPrimerDia</strong></div>
+                
+            }
             <div><span>Monto pagado</span><strong>@Money(Model.Detalle.MontoPagadoTotal)</strong></div>
-            <div><span>Monto pendiente</span><strong>@Money(Model.Detalle.MontoPendienteTotal)</strong></div>
-            <div><span>Monto comprometido</span><strong>@Money(Model.Detalle.MontoComprometidoTotal)</strong></div>
+            <div><span>Monto pendiente con pago</span><strong>@Money(Model.Detalle.MontoPendienteTotal)</strong></div>
+            <div><span>Monto comprometido con pago</span><strong>@Money(Model.Detalle.MontoComprometidoTotal)</strong></div>
         </div>
 
         <h2>Detalle de inscritos segun estado de pago</h2>
@@ -75,6 +82,10 @@
                     <th>Celular</th>
                     <th>Correo</th>
                     <th>Institucion de procedencia</th>
+                    @if (cursoPreguntaPresencialidad)
+                    {
+                        <th>Asistencia presencial primer dia</th>
+                    }
                     <th>Registro</th>
                     <th>Ultimo pago</th>
                     <th>Estado reporte</th>
@@ -86,7 +97,7 @@
             <tbody>
                 @if (Model.Detalle.Items.Count == 0)
                 {
-                    <tr><td colspan="11">No hay inscritos que coincidan con el filtro seleccionado.</td></tr>
+                    <tr><td colspan="@(cursoPreguntaPresencialidad ? 12 : 11)">No hay inscritos que coincidan con el filtro seleccionado.</td></tr>
                 }
                 else
                 {
@@ -98,6 +109,10 @@
                             <td>@(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)</td>
                             <td>@(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)</td>
                             <td>@(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)</td>
+                            @if (cursoPreguntaPresencialidad)
+                            {
+                                <td>@item.AsistiraPresencialPrimerDiaEtiqueta</td>
+                            }
                             <td>@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
                             <td>@item.EstadoReportePagoEtiqueta</td>

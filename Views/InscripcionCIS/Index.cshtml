@@ -14,6 +14,12 @@
     var telefonoContactoCurso = string.IsNullOrWhiteSpace(curso?.CelularContactoActividad)
         ? "+51 913 452 763"
         : curso.CelularContactoActividad;
+    var mostrarTarifaInsnsb = curso is not null &&
+        string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase) &&
+        decimal.Round(curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero) !=
+        decimal.Round(curso.CostoPersonalInsnsb ?? curso.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+    var mostrarTarifasCurso = curso is not null &&
+        string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
     static string FormatearCosto(decimal? monto, string fallback)
     {
         if (!monto.HasValue)
@@ -114,20 +120,29 @@
                 </p>
 
                 <div class="summary-grid">
-                    <div class="summary-card">
-                        <span>Tarifa general</span>
-                        <strong>@FormatearCosto(curso.CostoBase, "Por confirmar")</strong>
-                    </div>
-                    <div class="summary-card">
-                        <span>Tarifa trabajador INSNSB</span>
-                        <strong id="courseInternalCost">
-                            Comunicarse al @telefonoContactoCurso
-                        </strong>
-                    </div>
-                    <div class="summary-card">
-                        <span>Opciones de cuotas</span>
-                        <strong>@FormatearOpcionesCuotas(curso)</strong>
-                    </div>
+                    @if (mostrarTarifasCurso)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Tarifa general</span>
+                            <strong>@FormatearCosto(curso.CostoBase, "Por confirmar")</strong>
+                        </div>
+                    }
+                    @if (mostrarTarifaInsnsb)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Tarifa trabajador INSNSB</span>
+                            <strong id="courseInternalCost">
+                                Comunicarse al @telefonoContactoCurso
+                            </strong>
+                        </div>
+                    }
+                    @if (mostrarTarifasCurso)
+                    {
+                        <div class="summary-card js-payment-summary-card">
+                            <span>Opciones de cuotas</span>
+                            <strong>@FormatearOpcionesCuotas(curso)</strong>
+                        </div>
+                    }
                     <div class="summary-card">
                         <span>Modalidad</span>
                         <strong>@(string.IsNullOrWhiteSpace(curso.Modalidad) ? "Por confirmar" : curso.Modalidad)</strong>
@@ -186,7 +201,7 @@
                         <div class="form-group half-width">
                             <label for="numeroDocumento" class="required-label">Número de documento</label>
                             <input type="text" id="numeroDocumento" name="NumeroDocumento" maxlength="20" required>
-                            <small class="helper-text">Inscripción única por número de documento</small>
+                            <small class="helper-text">Ingresa el documento tal como figura en tu DNI, carnet de extranjería o pasaporte.</small>
                             <small id="dniLoader" class="loader-text" hidden>Consultando...</small>
 
                         </div>
@@ -230,15 +245,15 @@
                     <div class="form-row">
                         <div class="form-group half-width">
                             <label for="pais" class="required-label">País</label>
-                            <select id="pais" name="Pais" required></select>
+                            <select id="pais" name="Pais" required data-searchable-select data-search-placeholder="Buscar país..."></select>
                         </div>
                         <div class="form-group half-width" id="regionPeruGroup">
                             <label for="regionPeru" class="required-label">Departamento</label>
-                            <select id="regionPeru"></select>
+                            <select id="regionPeru" data-searchable-select data-search-placeholder="Buscar departamento..."></select>
                         </div>
                         <div class="form-group half-width hidden-field" id="regionExteriorGroup">
                             <label for="regionExterior" class="required-label">Región o ciudad</label>
-                            <input type="text" id="regionExterior" placeholder="Ej. Quito o Santiago">
+                            <input type="text" id="regionExterior" placeholder="Ej. Lima">
                         </div>
                         <input type="hidden" id="region" name="Region">
                     </div>
@@ -246,7 +261,7 @@
                     <div class="form-row">
                         <div class="form-group half-width">
                             <label for="profesion" class="required-label">Profesión</label>
-                            <select id="profesion" name="Profesion" required></select>
+                            <select id="profesion" name="Profesion" data-searchable-select data-search-placeholder="Buscar profesión..."></select>
                         </div>
                         <div class="form-group half-width hidden-field" id="especialidadContainer">
                             <label for="especialidad" class="required-label">Especialidad</label>
@@ -323,6 +338,19 @@
                         </div>
                     </div>
 
+                    @if (curso.SolicitaConfirmacionPresencialPrimerDia)
+                    {
+                        <div class="form-group">
+                            <label for="asistiraPresencialPrimerDia" class="required-label">Confirmación de asistencia presencial al primer día de clases</label>
+                            <select id="asistiraPresencialPrimerDia" name="AsistiraPresencialPrimerDia" required>
+                                <option value="">Seleccione...</option>
+                                <option value="true">Sí, contaré con asistencia presencial</option>
+                                <option value="false">No, no contaré con asistencia presencial</option>
+                            </select>
+                            <small class="helper-text">Esta informacion nos ayuda a organizar adecuadamente la presencialidad del inicio del curso.</small>
+                        </div>
+                    }
+
                     <div class="checkbox-group">
                         <input type="checkbox" id="aceptaTratamientoDatos" name="AceptaTratamientoDatos" value="true" required>
                         <label for="aceptaTratamientoDatos">
@@ -381,7 +409,7 @@
                     <p id="successMessage"></p>
                     <div class="plan-actions">
                         <a id="successPrimaryLink" class="program-link hidden-field" href="#">Ir ahora al pago</a>
-                        <a id="successTrackingLink" class="back-link" asp-action="Seguimiento">Ir a seguimiento de inscripciones y plan de pagos</a>
+                        <a id="successTrackingLink" class="back-link" asp-action="Seguimiento">Ir a seguimiento de inscripciones</a>
                     </div>
                 </div>
             </div>

@@ -13,6 +13,7 @@
     }
 
     var mostrarSinCobro = Model.Detalle?.SinCobro > 0;
+    var cursoPreguntaPresencialidad = Model.Detalle?.SolicitaConfirmacionPresencialPrimerDia == true;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -97,52 +98,60 @@
             <div class="admin-section-header">
                 <div>
                     <h2>@(string.IsNullOrWhiteSpace(Model.Detalle.NombreCurso) ? "Curso seleccionado" : Model.Detalle.NombreCurso)</h2>
-                    <p class="admin-section-copy">Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente.</p>
+                    <p class="admin-section-copy">Inscritos = Pagado o Pagado parcial. Pre-inscritos = Pendiente. Los montos filtrados excluyen pre-inscritos sin ningun pago.</p>
                 </div>
             </div>
 
             <div class="report-metric-grid">
                 <div class="report-metric-card">
-                    <span>Total registros</span>
+                    <span>Total registros <span class="report-help-tip" tabindex="0" title="Cantidad total de registros del curso antes de aplicar el filtro de estado o busqueda.">?</span></span>
                     <strong>@Model.Detalle.TotalInscritos</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Inscritos</span>
+                    <span>Inscritos <span class="report-help-tip" tabindex="0" title="Alumnos con estado Pagado o Pagado parcial. Son registros que ya tienen al menos un pago o el pago completo.">?</span></span>
                     <strong>@(Model.Detalle.Pagados + Model.Detalle.PagadosParciales)</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Pre-inscritos</span>
+                    <span>Pre-inscritos <span class="report-help-tip" tabindex="0" title="Alumnos con estado Pendiente. Aun no tienen ninguna cuota pagada y no se consideran en los montos de las cards.">?</span></span>
                     <strong>@Model.Detalle.Pendientes</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Pagado</span>
+                    <span>Inscritos totales <span class="report-help-tip" tabindex="0" title="Alumnos que completaron el pago de todas sus cuotas.">?</span></span>
                     <strong>@Model.Detalle.Pagados</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Pagado parcial</span>
+                    <span>Inscritos parciales <span class="report-help-tip" tabindex="0" title="Alumnos que pagaron una o mas cuotas, pero aun mantienen deuda pendiente.">?</span></span>
                     <strong>@Model.Detalle.PagadosParciales</strong>
-                </div>
-                <div class="report-metric-card">
-                    <span>Pendiente</span>
-                    <strong>@Model.Detalle.Pendientes</strong>
                 </div>
                 @if (mostrarSinCobro)
                 {
                     <div class="report-metric-card">
-                        <span>Sin cobro</span>
+                        <span>Sin cobro <span class="report-help-tip" tabindex="0" title="Alumnos cuyo costo final registrado fue S/ 0.00.">?</span></span>
                         <strong>@Model.Detalle.SinCobro</strong>
                     </div>
                 }
+                @if (cursoPreguntaPresencialidad)
+                {
+                    <div class="report-metric-card">
+                        <span>Asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que confirmaron asistencia presencial al primer dia de clases.">?</span></span>
+                        <strong>@Model.Detalle.AsistiranPresencialPrimerDia</strong>
+                    </div>
+                    <div class="report-metric-card">
+                        <span>No asistiran presencialmente <span class="report-help-tip" tabindex="0" title="Alumnos que indicaron que no asistiran presencialmente al primer dia de clases.">?</span></span>
+                        <strong>@Model.Detalle.NoAsistiranPresencialPrimerDia</strong>
+                    </div>
+
+                }
                 <div class="report-metric-card">
-                    <span>Pagado filtrado</span>
+                    <span>Monto pagado (Inscritos) <span class="report-help-tip" tabindex="0" title="Suma del dinero efectivamente pagado por los inscritos visibles segun los filtros aplicados.">?</span></span>
                     <strong>@Money(Model.Detalle.MontoPagadoTotal)</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Pendiente filtrado</span>
+                    <span>Monto pendiente con pago (Inscritos) <span class="report-help-tip" tabindex="0" title="Suma de la deuda restante solo de inscritos que ya pagaron al menos una cuota. Excluye pre-inscritos sin pagos.">?</span></span>
                     <strong>@Money(Model.Detalle.MontoPendienteTotal)</strong>
                 </div>
                 <div class="report-metric-card">
-                    <span>Comprometido filtrado</span>
+                    <span>Monto comprometido con pago (Inscritos) <span class="report-help-tip" tabindex="0" title="Monto total esperado de los inscritos que ya tienen pago parcial o completo. Es pagado mas pendiente con pago.">?</span></span>
                     <strong>@Money(Model.Detalle.MontoComprometidoTotal)</strong>
                 </div>
             </div>
@@ -166,6 +175,10 @@
                                 <th>Celular</th>
                                 <th>Correo</th>
                                 <th>Institucion de procedencia</th>
+                                @if (cursoPreguntaPresencialidad)
+                                {
+                                    <th>Asistencia presencial primer dia</th>
+                                }
                                 <th>Registro</th>
                                 <th>Ultimo pago</th>
                                 <th>Estado reporte</th>
@@ -183,6 +196,10 @@
                                     <td>@(string.IsNullOrWhiteSpace(item.Celular) ? "-" : item.Celular)</td>
                                     <td>@(string.IsNullOrWhiteSpace(item.Correo) ? "-" : item.Correo)</td>
                                     <td>@(string.IsNullOrWhiteSpace(item.InstitucionProcedencia) ? "-" : item.InstitucionProcedencia)</td>
+                                    @if (cursoPreguntaPresencialidad)
+                                    {
+                                        <td>@item.AsistiraPresencialPrimerDiaEtiqueta</td>
+                                    }
                                     <td>@item.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>@(item.FechaUltimoPago.HasValue ? item.FechaUltimoPago.Value.ToString("dd/MM/yyyy HH:mm") : "-")</td>
                                     <td><span class="report-status-pill report-status-@item.EstadoReportePago.ToLowerInvariant()">@item.EstadoReportePagoEtiqueta</span></td>

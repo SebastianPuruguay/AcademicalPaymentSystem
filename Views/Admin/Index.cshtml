@@ -1,7 +1,13 @@
-@model CURSO_INTERCULTURALIDAD.Models.PanelAdminCodigosViewModel
+﻿@model CURSO_INTERCULTURALIDAD.Models.PanelAdminCodigosViewModel
 @{
     ViewData["Title"] = "Panel Admin";
     var cursoActual = Model.Cursos.FirstOrDefault(item => item.IdActividad == Model.CursoSeleccionadoId);
+    var cursoTieneCobro = string.Equals(cursoActual?.SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
+    var costoGeneralCurso = decimal.Round(cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+    var costoInsnsbCurso = decimal.Round(cursoActual?.CostoPersonalInsnsb ?? cursoActual?.CostoBase ?? 0m, 2, MidpointRounding.AwayFromZero);
+    var requiereCodigoInsnsb = cursoTieneCobro
+        && costoGeneralCurso > 0m
+        && costoGeneralCurso != costoInsnsbCurso;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/admin.css" asp-append-version="true" />
@@ -11,12 +17,15 @@
     <div class="admin-toolbar">
         <div>
             <span class="admin-eyebrow">INSNSB - Administracion</span>
-            <h1>Panel de cursos y codigos unicos</h1>
-            <p>Administra la visibilidad del formulario publico, corrige la ficha del curso antes de publicarla y revisa pagos o codigos unicos desde un solo lugar.</p>
+            <h1>Panel de cursos y códigos únicos</h1>
+            <p>Administra la visibilidad del formulario publico, corrige la ficha del curso antes de publicarla y revisa pagos o códigos únicos desde un solo lugar.</p>
         </div>
         <div class="admin-toolbar-actions">
             <a class="btn btn-outline-primary" asp-action="ReporteInscritos" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte inscritos</a>
-            <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte pagantes</a>
+            @if (cursoTieneCobro)
+            {
+                <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Reporte pagantes</a>
+            }
             <form asp-action="Logout" method="post">
                 @Html.AntiForgeryToken()
                 <button type="submit" class="btn btn-outline-secondary">Cerrar sesion</button>
@@ -37,19 +46,29 @@
     <div class="admin-grid">
         <section class="admin-card">
             <h2>Curso</h2>
-            <form asp-action="Index" method="get" class="admin-form-stack">
+            <form id="adminCourseSelectorForm" asp-action="Index" method="get" class="admin-form-stack">
                 <div>
                     <label for="cursoId" class="form-label">Curso administrado</label>
-                    <select id="cursoId" name="cursoId" class="form-select" onchange="this.form.submit()">
+                    <div class="admin-course-filter" role="group" aria-label="Filtro por tipo de curso">
+                        <button type="button" class="admin-filter-chip active" data-course-charge-filter="todos">Todos</button>
+                        <button type="button" class="admin-filter-chip" data-course-charge-filter="Si">Pagados</button>
+                        <button type="button" class="admin-filter-chip" data-course-charge-filter="No">Gratuitos</button>
+                    </div>
+                    <div class="admin-search-select">
+                        <input id="cursoSearch" class="form-control" type="search" autocomplete="off" placeholder="Escriba el nombre o ID del curso..." value="@(cursoActual?.NombreActividad ?? string.Empty)" />
+                        <div id="cursoSearchResults" class="admin-search-results" hidden></div>
+                    </div>
+                    <select id="cursoId" name="cursoId" class="form-select admin-native-select-hidden" onchange="this.form.submit()">
                         @foreach (var curso in Model.Cursos)
                         {
+                            var tipoCobro = string.Equals(curso.SeCobra, "Si", StringComparison.OrdinalIgnoreCase) ? "Si" : "No";
                             if (curso.IdActividad == Model.CursoSeleccionadoId)
                             {
-                                <option value="@curso.IdActividad" selected>@curso.NombreActividad</option>
+                                <option value="@curso.IdActividad" data-charge="@tipoCobro" selected>@curso.NombreActividad</option>
                             }
                             else
                             {
-                                <option value="@curso.IdActividad">@curso.NombreActividad</option>
+                                <option value="@curso.IdActividad" data-charge="@tipoCobro">@curso.NombreActividad</option>
                             }
                         }
                     </select>
@@ -60,11 +79,15 @@
             @if (Model.CursoSeleccionadoId.HasValue)
             {
                 <div class="stats-pills">
-                    <span>Total: <strong>@Model.TotalCodigos</strong></span>
-                    <span>Disponibles: <strong>@Model.CodigosDisponibles</strong></span>
-                    <span>Usados: <strong>@Model.CodigosUsados</strong></span>
+                    @if (requiereCodigoInsnsb)
+                    {
+                        <span>Total codigos: <strong>@Model.TotalCodigos</strong></span>
+                        <span>Disponibles: <strong>@Model.CodigosDisponibles</strong></span>
+                        <span>Usados: <strong>@Model.CodigosUsados</strong></span>
+                    }
                     <span>Visible al alumno: <strong>@(cursoActual?.VisibleEnFormulario ?? "Si")</strong></span>
                     <span>Historico admin: <strong>@(cursoActual?.FuePagadoHistorico ?? "No")</strong></span>
+                    <span>Se cobra: <strong>@(cursoActual?.SeCobra ?? "No")</strong></span>
                 </div>
 
                 <div class="admin-card-actions">
@@ -75,8 +98,10 @@
             }
         </section>
 
+        @if (requiereCodigoInsnsb)
+        {
         <section class="admin-card">
-            <h2>Asignar codigo a documento</h2>
+            <h2>Asignar código a documento</h2>
             <form asp-action="GenerarCodigos" method="post" class="admin-form-stack">
                 @Html.AntiForgeryToken()
                 <input type="hidden" asp-for="Formulario.CursoId" value="@Model.CursoSeleccionadoId" />
@@ -92,8 +117,8 @@
                     <span asp-validation-for="Formulario.GeneradoPor" class="text-danger"></span>
                 </div>
                 <div>
-                    <label asp-for="Formulario.Observacion" class="form-label">Observacion</label>
-                    <textarea asp-for="Formulario.Observacion" class="form-control" rows="3" placeholder="Ej. Codigo reservado para la segunda convocatoria interna"></textarea>
+                    <label asp-for="Formulario.Observacion" class="form-label">Observación</label>
+                    <textarea asp-for="Formulario.Observacion" class="form-control" rows="3" placeholder="Ej. Código reservado para la segunda convocatoria interna"></textarea>
                     <span asp-validation-for="Formulario.Observacion" class="text-danger"></span>
                 </div>
                 @if (Model.CursoSeleccionadoId.HasValue)
@@ -106,9 +131,10 @@
                 }
             </form>
         </section>
+        }
     </div>
 
-    @if (Model.CodigosGenerados.Count > 0)
+    @if (requiereCodigoInsnsb && Model.CodigosGenerados.Count > 0)
     {
         <section class="admin-card">
             <h2>Codigos recien generados</h2>
@@ -116,80 +142,99 @@
         </section>
     }
 
+    @if (requiereCodigoInsnsb)
+    {
     <section class="admin-card">
-        <h2>Ultimos codigos del curso</h2>
+        <details class="admin-collapsible" id="adminCodesSection">
+            <summary>
+                <span>Últimos códigos del curso</span>
+                <small>@Model.Codigos.Count registro(s). Despliega para revisar, ordenar o eliminar.</small>
+            </summary>
 
-        @if (Model.Codigos.Count == 0)
-        {
-            <p class="text-muted mb-0">Aun no hay codigos registrados para este curso.</p>
-        }
-        else
-        {
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>Codigo</th>
-                            <th>Documento asignado</th>
-                            <th>Estado</th>
-                            <th>Generado</th>
-                            <th>Usado por</th>
-                            <th>Observacion</th>
-                            <th class="text-end">Accion</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var codigo in Model.Codigos)
-                        {
+            @if (Model.Codigos.Count == 0)
+            {
+                <p class="text-muted mb-0">Aún no hay códigos registrados para este curso.</p>
+            }
+            else
+            {
+                <div class="table-responsive mt-3">
+                    <table class="table table-hover align-middle" id="adminCodesTable">
+                        <thead>
                             <tr>
-                                <td><code>@codigo.Codigo</code></td>
-                                <td>@(string.IsNullOrWhiteSpace(codigo.DniAsignado) ? "-" : codigo.DniAsignado)</td>
-                                <td>
-                                    <span class="status-badge @(codigo.Estado == "Usado" ? "used" : "available")">@codigo.Estado</span>
-                                </td>
-                                <td>@codigo.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td>
-                                    @if (string.IsNullOrWhiteSpace(codigo.UsadoPorDocumento) && string.IsNullOrWhiteSpace(codigo.UsadoPorCorreo))
-                                    {
-                                        <span class="text-muted">Disponible</span>
-                                    }
-                                    else
-                                    {
-                                        <div>@codigo.UsadoPorDocumento</div>
-                                        <div class="small text-muted">@codigo.UsadoPorCorreo</div>
-                                    }
-                                </td>
-                                <td>@(string.IsNullOrWhiteSpace(codigo.Observacion) ? "-" : codigo.Observacion)</td>
-                                <td class="text-end">
-                                    <form asp-action="EliminarCodigo" method="post" class="d-inline js-confirm-form">
-                                        @Html.AntiForgeryToken()
-                                        <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
-                                        <input type="hidden" name="codigoId" value="@codigo.IdCodigo" />
-                                        <button type="submit"
-                                                class="btn btn-sm btn-outline-danger"
-                                                data-confirm-title="Eliminar codigo INSNSB"
-                                                data-confirm-message="Se eliminara el codigo @codigo.Codigo. Esta accion no se puede deshacer.">
-                                            Eliminar
-                                        </button>
-                                    </form>
-                                </td>
+                                <th>Código</th>
+                                <th>Documento asignado</th>
+                                <th><button type="button" class="admin-sort-button js-sort-codes" data-sort-key="estado">Estado</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-codes" data-sort-key="generado">Generado</button></th>
+                                <th>Usado por</th>
+                                <th>Observación</th>
+                                <th class="text-end">Accion</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
+                        </thead>
+                        <tbody id="adminCodesTableBody">
+                            @foreach (var codigo in Model.Codigos)
+                            {
+                                <tr data-sort-estado="@codigo.Estado" data-sort-generado="@codigo.FechaGeneracion.ToString("yyyyMMddHHmmss")">
+                                    <td><code>@codigo.Codigo</code></td>
+                                    <td>@(string.IsNullOrWhiteSpace(codigo.DniAsignado) ? "-" : codigo.DniAsignado)</td>
+                                    <td>
+                                        <span class="status-badge @(codigo.Estado == "Usado" ? "used" : "available")">@codigo.Estado</span>
+                                    </td>
+                                    <td>@codigo.FechaGeneracion.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @if (string.IsNullOrWhiteSpace(codigo.UsadoPorDocumento) && string.IsNullOrWhiteSpace(codigo.UsadoPorCorreo))
+                                        {
+                                            <span class="text-muted">Disponible</span>
+                                        }
+                                        else
+                                        {
+                                            <div>@codigo.UsadoPorDocumento</div>
+                                            <div class="small text-muted">@codigo.UsadoPorCorreo</div>
+                                        }
+                                    </td>
+                                    <td>@(string.IsNullOrWhiteSpace(codigo.Observacion) ? "-" : codigo.Observacion)</td>
+                                    <td class="text-end">
+                                        <form asp-action="EliminarCodigo" method="post" class="d-inline js-confirm-form">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
+                                            <input type="hidden" name="codigoId" value="@codigo.IdCodigo" />
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    data-confirm-title="Eliminar código INSNSB"
+                                                    data-confirm-message="Se eliminara el código @codigo.Codigo. Esta accion no se puede deshacer.">
+                                                Eliminar
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </details>
     </section>
+    }
 
     <section class="admin-card">
         <div class="admin-section-header">
             <div>
-                <h2>Seguimiento de pagos</h2>
-                <p class="admin-section-copy">Consulta por curso el estado de pago de cada alumno y abre el detalle de cuotas solo cuando lo necesites.</p>
+                <h2>@(cursoTieneCobro ? "Seguimiento de pagos" : "Seguimiento de inscripciones")</h2>
+                <p class="admin-section-copy">
+                    @(cursoTieneCobro
+                        ? "Consulta por curso el estado de pago de cada alumno y abre el detalle de cuotas solo cuando lo necesites."
+                        : "Consulta por curso los alumnos inscritos y sus datos principales de contacto.")
+                </p>
             </div>
-            @if (Model.CursoSeleccionadoId.HasValue)
+
             {
                 <div class="admin-toolbar-actions">
+                    <form asp-action="SincronizarPagosIzipay" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
+                        <button type="submit" class="btn btn-outline-secondary">
+                            Actualizar pagos IziPay
+                        </button>
+                    </form>
                     <a class="btn btn-outline-primary" asp-action="ReportePagantes" asp-route-cursoId="@Model.CursoSeleccionadoId">Abrir reporte de pagantes</a>
                 </div>
             }
@@ -197,11 +242,11 @@
 
         @if (!Model.CursoSeleccionadoId.HasValue)
         {
-            <p class="text-muted mb-0">Seleccione un curso para revisar sus pagos.</p>
+            <p class="text-muted mb-0">Seleccione un curso para revisar sus inscripciones.</p>
         }
         else if (Model.SeguimientoPagos.Alumnos.Count == 0)
         {
-            <p class="text-muted mb-0">Este curso aun no registra inscripciones pagadas con plan de cuotas.</p>
+            <p class="text-muted mb-0">Este curso aun no registra inscripciones.</p>
         }
         else
         {
@@ -217,10 +262,17 @@
 
             <div class="stats-pills">
                 <span>Inscripciones: <strong>@Model.SeguimientoPagos.TotalInscripciones</strong></span>
-                <span>Con deuda: <strong>@Model.SeguimientoPagos.ConDeudaPendiente</strong></span>
-                <span>Pagados: <strong>@Model.SeguimientoPagos.CompletamentePagados</strong></span>
-                <span>Monto pagado: <strong>@(Model.SeguimientoPagos.MontoPagado == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPagado:N2}")</strong></span>
-                <span>Monto pendiente: <strong>@(Model.SeguimientoPagos.MontoPendiente == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPendiente:N2}")</strong></span>
+                @if (cursoTieneCobro)
+                {
+                    <span>Con deuda: <strong>@Model.SeguimientoPagos.ConDeudaPendiente</strong></span>
+                    <span>Pagados: <strong>@Model.SeguimientoPagos.CompletamentePagados</strong></span>
+                    <span>Monto pagado: <strong>@(Model.SeguimientoPagos.MontoPagado == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPagado:N2}")</strong></span>
+                    <span>Monto pendiente: <strong>@(Model.SeguimientoPagos.MontoPendiente == 0m ? "--" : $"S/ {Model.SeguimientoPagos.MontoPendiente:N2}")</strong></span>
+                }
+                else
+                {
+                    <span>Inscripcion gratuita: <strong>Si</strong></span>
+                }
             </div>
 
             <div class="table-responsive">
@@ -230,11 +282,14 @@
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="alumno">Alumno</button></th>
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="documento">Documento</button></th>
                             <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="registro">Registro</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="estado">Estado</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="total">Total</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pagado">Pagado</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pendiente">Pendiente</button></th>
-                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="cuotas">Cuotas</button></th>
+                            <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="estado">@(cursoTieneCobro ? "Estado" : "Estado de inscripcion")</button></th>
+                            @if (cursoTieneCobro)
+                            {
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="total">Total</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pagado">Pagado</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="pendiente">Pendiente</button></th>
+                                <th><button type="button" class="admin-sort-button js-sort-payments" data-sort-key="cuotas">Cuotas</button></th>
+                            }
                             <th></th>
                         </tr>
                     </thead>
@@ -269,19 +324,25 @@
                                 <td>@alumno.NumeroDocumento</td>
                                 <td>@alumno.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td>
-                                    <span class="status-badge @(string.Equals(alumno.EstadoPagoGeneral, "PAGADO", StringComparison.OrdinalIgnoreCase) ? "available" : "used")">
-                                        @alumno.EstadoPagoGeneral
+                                    <span class="status-badge @(cursoTieneCobro && !string.Equals(alumno.EstadoPagoGeneral, "PAGADO", StringComparison.OrdinalIgnoreCase) ? "used" : "available")">
+                                        @(cursoTieneCobro ? alumno.EstadoPagoGeneral : "INSCRITO")
                                     </span>
                                 </td>
-                                <td>@(alumno.CostoFinal == 0m ? "--" : $"S/ {alumno.CostoFinal:N2}")</td>
-                                <td>@(alumno.MontoPagado == 0m ? "--" : $"S/ {alumno.MontoPagado:N2}")</td>
-                                <td>@(alumno.MontoPendiente == 0m ? "--" : $"S/ {alumno.MontoPendiente:N2}")</td>
-                                <td>@alumno.CuotasPagadas/@alumno.NumeroCuotas</td>
+                                @if (cursoTieneCobro)
+                                {
+                                    <td>@(alumno.CostoFinal == 0m ? "--" : $"S/ {alumno.CostoFinal:N2}")</td>
+                                    <td>@(alumno.MontoPagado == 0m ? "--" : $"S/ {alumno.MontoPagado:N2}")</td>
+                                    <td>@(alumno.MontoPendiente == 0m ? "--" : $"S/ {alumno.MontoPendiente:N2}")</td>
+                                    <td>@alumno.CuotasPagadas/@alumno.NumeroCuotas</td>
+                                }
                                 <td class="text-end">
                                     <div class="admin-row-actions">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary js-toggle-detail" data-target="@detalleId">
-                                            Mas detalle
-                                        </button>
+                                        @if (cursoTieneCobro)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-toggle-detail" data-target="@detalleId">
+                                                Mas detalle
+                                            </button>
+                                        }
                                         <form asp-action="EliminarInscripcion" method="post" class="d-inline js-confirm-form">
                                             @Html.AntiForgeryToken()
                                             <input type="hidden" name="cursoId" value="@Model.CursoSeleccionadoId" />
@@ -289,13 +350,15 @@
                                             <button type="submit"
                                                     class="btn btn-sm btn-outline-danger"
                                                     data-confirm-title="Eliminar inscrito"
-                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos, su plan de cuotas y sus datos de seguimiento. Si uso codigo INSNSB, el codigo quedara disponible nuevamente.">
+                                                    data-confirm-message="Se eliminara la inscripcion de @alumno.Nombres @alumno.Apellidos y sus datos de seguimiento. Si uso codigo INSNSB, el codigo quedara disponible nuevamente.">
                                                 Eliminar
                                             </button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
+                            @if (cursoTieneCobro)
+                            {
                             <tr id="@detalleId" class="payment-detail-row hidden-detail-row">
                                 <td colspan="9">
                                     <div class="payment-detail-box">
@@ -355,11 +418,36 @@
                                                                 }
                                                                 else if (cuota.PuedePagarAhora)
                                                                 {
-                                                                    <span class="small text-primary">Habilitada para pago</span>
-                                                                    @if (cuota.IdPagoIzipay.HasValue)
-                                                                    {
-                                                                        <div class="small text-muted">IziPay #@cuota.IdPagoIzipay</div>
-                                                                    }
+                                                                    <div class="d-flex flex-column gap-1 align-items-start">
+                                                                        <span class="small text-primary">Habilitada para pago</span>
+                                                                        @if (cuota.IdPagoIzipay.HasValue)
+                                                                        {
+                                                                            <div class="small text-muted">IziPay #@cuota.IdPagoIzipay</div>
+                                                                        }
+                                                                        @if (!string.IsNullOrWhiteSpace(cuota.UrlPagoIzipay))
+                                                                        {
+                                                                            <a class="btn btn-sm btn-outline-primary" href="@cuota.UrlPagoIzipay" target="_blank" rel="noopener noreferrer">
+                                                                                Abrir link IziPay
+                                                                            </a>
+                                                                            <div class="small text-muted">Puedes compartir este link con el inscrito para pago presencial/asistido.</div>
+                                                                        }
+                                                                        else if (cuota.IdPagoIzipay.HasValue)
+                                                                        {
+                                                                            <div class="small text-warning">Esta cuota ya tiene boleta IziPay generada, pero no se pudo obtener su URL. Verifique la configuracion o el campo url_pago_izipay.</div>
+                                                                        }
+                                                                        else if (!string.IsNullOrWhiteSpace(cuota.TokenPagoPasarela))
+                                                                        {
+                                                                            <a class="btn btn-sm btn-outline-primary"
+                                                                               asp-controller="InscripcionCIS"
+                                                                               asp-action="IniciarPagoIzipay"
+                                                                               asp-route-token="@cuota.TokenPagoPasarela"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer">
+                                                                                Generar link IziPay
+                                                                            </a>
+                                                                            <div class="small text-muted">Abrira el flujo normal y reservara la cuota para evitar duplicados.</div>
+                                                                        }
+                                                                    </div>
                                                                 }
                                                                 else
                                                                 {
@@ -374,6 +462,7 @@
                                     </div>
                                 </td>
                             </tr>
+                            }
                         }
                     </tbody>
                 </table>
@@ -381,6 +470,97 @@
         }
     </section>
 </div>
+
+<script>
+    (() => {
+        const form = document.getElementById('adminCourseSelectorForm');
+        const select = document.getElementById('cursoId');
+        const search = document.getElementById('cursoSearch');
+        const results = document.getElementById('cursoSearchResults');
+        const chips = document.querySelectorAll('[data-course-charge-filter]');
+        let activeFilter = 'todos';
+
+        if (!form || !select || !search || !results) {
+            return;
+        }
+
+        const normalize = value => (value || '')
+            .toString()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+
+        const getOptions = () => Array.from(select.options).map(option => ({
+            value: option.value,
+            label: option.textContent.trim(),
+            charge: option.dataset.charge || 'No',
+            selected: option.selected
+        }));
+
+        const closeResults = () => {
+            results.hidden = true;
+        };
+
+        const renderResults = () => {
+            const query = normalize(search.value);
+            const matches = getOptions()
+                .filter(option => activeFilter === 'todos' || option.charge === activeFilter)
+                .filter(option => !query || normalize(`${option.value} ${option.label}`).includes(query))
+                .slice(0, 12);
+
+            results.innerHTML = '';
+
+            if (matches.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'admin-search-empty';
+                empty.textContent = 'No se encontraron cursos con ese filtro.';
+                results.appendChild(empty);
+                results.hidden = false;
+                return;
+            }
+
+            matches.forEach(option => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'admin-search-option';
+                button.innerHTML = `<strong>${option.label}</strong><span>ID ${option.value} · ${option.charge === 'Si' ? 'Pagado' : 'Gratuito'}</span>`;
+                button.addEventListener('mousedown', event => event.preventDefault());
+                button.addEventListener('click', () => {
+                    select.value = option.value;
+                    search.value = option.label;
+                    closeResults();
+                    form.submit();
+                });
+                results.appendChild(button);
+            });
+
+            results.hidden = false;
+        };
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                activeFilter = chip.dataset.courseChargeFilter || 'todos';
+                chips.forEach(item => item.classList.toggle('active', item === chip));
+                renderResults();
+                search.focus();
+            });
+        });
+
+        search.addEventListener('input', renderResults);
+        search.addEventListener('focus', renderResults);
+        search.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                closeResults();
+            }
+        });
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.admin-search-select') && !event.target.closest('.admin-course-filter')) {
+                closeResults();
+            }
+        });
+    })();
+</script>
 
 <div id="adminConfirmModal" class="admin-modal-backdrop" hidden>
     <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="adminConfirmTitle">
@@ -397,6 +577,62 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            var codesTableBody = document.getElementById('adminCodesTableBody');
+            var codeSortButtons = document.querySelectorAll('.js-sort-codes');
+            var codeSortState = { key: 'generado', direction: 'desc' };
+
+            function compareCodeValues(a, b) {
+                if (a === b) {
+                    return 0;
+                }
+
+                return a > b ? 1 : -1;
+            }
+
+            function applyCodesSort() {
+                if (!codesTableBody) {
+                    return;
+                }
+
+                var rows = Array.from(codesTableBody.querySelectorAll('tr'));
+                rows.sort(function (left, right) {
+                    var leftValue = left.dataset['sort' + codeSortState.key.charAt(0).toUpperCase() + codeSortState.key.slice(1)] || '';
+                    var rightValue = right.dataset['sort' + codeSortState.key.charAt(0).toUpperCase() + codeSortState.key.slice(1)] || '';
+                    var result = compareCodeValues(leftValue, rightValue);
+                    return codeSortState.direction === 'asc' ? result : result * -1;
+                });
+
+                rows.forEach(function (row) {
+                    codesTableBody.appendChild(row);
+                });
+
+                codeSortButtons.forEach(function (button) {
+                    var isActive = button.getAttribute('data-sort-key') === codeSortState.key;
+                    button.classList.toggle('is-active', isActive);
+                    button.setAttribute('data-sort-direction', isActive ? codeSortState.direction : '');
+                });
+            }
+
+            codeSortButtons.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    var key = button.getAttribute('data-sort-key');
+                    if (!key) {
+                        return;
+                    }
+
+                    if (codeSortState.key === key) {
+                        codeSortState.direction = codeSortState.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        codeSortState.key = key;
+                        codeSortState.direction = key === 'generado' ? 'desc' : 'asc';
+                    }
+
+                    applyCodesSort();
+                });
+            });
+
+            applyCodesSort();
+
             document.querySelectorAll('.js-toggle-detail').forEach(function (button) {
                 button.addEventListener('click', function () {
                     var targetId = button.getAttribute('data-target');
@@ -558,3 +794,4 @@
         });
     </script>
 }
+

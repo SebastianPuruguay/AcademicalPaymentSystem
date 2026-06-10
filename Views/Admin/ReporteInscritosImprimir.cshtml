@@ -46,6 +46,7 @@
     {
         var resumen = Model.Detalle.Resumen;
         var mostrarSinCobro = resumen.SinCobro > 0;
+        var cursoTieneCobro = Model.Detalle.CursoTieneCobro;
         var tablas = new[]
         {
             new { Titulo = "Inscritos por pais", Items = Model.Detalle.PorPais },
@@ -60,20 +61,32 @@
 
         <div class="summary">
             <div><span>Total registros</span><strong>@resumen.TotalInscritos</strong></div>
-            <div><span>Inscritos</span><strong>@(resumen.Pagados + resumen.PagadosParciales)</strong></div>
-            <div><span>Pre-inscritos</span><strong>@resumen.Pendientes</strong></div>
+            @if (cursoTieneCobro)
+            {
+                <div><span>Inscritos</span><strong>@(resumen.Pagados + resumen.PagadosParciales)</strong></div>
+                <div><span>Pre-inscritos</span><strong>@resumen.Pendientes</strong></div>
+            }
             <div><span>Internos INSNSB</span><strong>@resumen.Internos</strong></div>
             <div><span>Externos</span><strong>@resumen.Externos</strong></div>
-            <div><span>Pagado</span><strong>@resumen.Pagados</strong></div>
-            <div><span>Pagado parcial</span><strong>@resumen.PagadosParciales</strong></div>
-            <div><span>Pendiente</span><strong>@resumen.Pendientes</strong></div>
-            @if (mostrarSinCobro)
+            @if (resumen.SolicitaConfirmacionPresencialPrimerDia)
             {
-                <div><span>Sin cobro</span><strong>@resumen.SinCobro</strong></div>
+                <div><span>Asistiran presencialmente</span><strong>@resumen.AsistiranPresencialPrimerDia</strong></div>
+                <div><span>No asistiran presencialmente</span><strong>@resumen.NoAsistiranPresencialPrimerDia</strong></div>
+                
             }
-            <div><span>Monto pagado</span><strong>@Money(resumen.MontoPagado)</strong></div>
-            <div><span>Deuda pendiente</span><strong>@Money(resumen.MontoDeuda)</strong></div>
-            <div><span>Total pagado + deuda</span><strong>@Money(resumen.MontoTotal)</strong></div>
+            @if (cursoTieneCobro)
+            {
+                <div><span>Pagado</span><strong>@resumen.Pagados</strong></div>
+                <div><span>Pagado parcial</span><strong>@resumen.PagadosParciales</strong></div>
+                <div><span>Pendiente</span><strong>@resumen.Pendientes</strong></div>
+                @if (mostrarSinCobro)
+                {
+                    <div><span>Sin cobro</span><strong>@resumen.SinCobro</strong></div>
+                }
+                <div><span>Monto pagado</span><strong>@Money(resumen.MontoPagado)</strong></div>
+                <div><span>Deuda pendiente con pago</span><strong>@Money(resumen.MontoDeuda)</strong></div>
+                <div><span>Total comprometido con pago</span><strong>@Money(resumen.MontoTotal)</strong></div>
+            }
         </div>
 
         @foreach (var tabla in tablas)
@@ -84,26 +97,32 @@
                     <tr>
                         <th>Categoria</th>
                         <th class="num">Total</th>
-                        <th class="num">Inscritos</th>
-                        <th class="num">Pre-inscritos</th>
+                        @if (cursoTieneCobro)
+                        {
+                            <th class="num">Inscritos</th>
+                            <th class="num">Pre-inscritos</th>
+                        }
                         <th class="num">Internos</th>
                         <th class="num">Externos</th>
-                        <th class="num">Pagado</th>
-                        <th class="num">Pagado parcial</th>
-                        <th class="num">Pendiente</th>
-                        @if (mostrarSinCobro)
+                        @if (cursoTieneCobro)
                         {
-                            <th class="num">Sin cobro</th>
+                            <th class="num">Pagado</th>
+                            <th class="num">Pagado parcial</th>
+                            <th class="num">Pendiente</th>
+                            @if (mostrarSinCobro)
+                            {
+                                <th class="num">Sin cobro</th>
+                            }
+                            <th class="num">Monto pagado</th>
+                            <th class="num">Deuda con pago</th>
+                            <th class="num">Comprometido S/</th>
                         }
-                        <th class="num">Monto pagado</th>
-                        <th class="num">Deuda</th>
-                        <th class="num">Total S/</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (tabla.Items.Count == 0)
                     {
-                        <tr><td colspan="@(mostrarSinCobro ? 13 : 12)">No hay datos para mostrar.</td></tr>
+                        <tr><td colspan="@(cursoTieneCobro ? (mostrarSinCobro ? 13 : 12) : 4)">No hay datos para mostrar.</td></tr>
                     }
                     else
                     {
@@ -112,20 +131,26 @@
                             <tr>
                                 <td>@item.Categoria</td>
                                 <td class="num">@item.TotalInscritos</td>
-                                <td class="num">@(item.Pagados + item.PagadosParciales)</td>
-                                <td class="num">@item.Pendientes</td>
+                                @if (cursoTieneCobro)
+                                {
+                                    <td class="num">@(item.Pagados + item.PagadosParciales)</td>
+                                    <td class="num">@item.Pendientes</td>
+                                }
                                 <td class="num">@item.Internos</td>
                                 <td class="num">@item.Externos</td>
-                                <td class="num">@item.Pagados</td>
-                                <td class="num">@item.PagadosParciales</td>
-                                <td class="num">@item.Pendientes</td>
-                                @if (mostrarSinCobro)
+                                @if (cursoTieneCobro)
                                 {
-                                    <td class="num">@item.SinCobro</td>
+                                    <td class="num">@item.Pagados</td>
+                                    <td class="num">@item.PagadosParciales</td>
+                                    <td class="num">@item.Pendientes</td>
+                                    @if (mostrarSinCobro)
+                                    {
+                                        <td class="num">@item.SinCobro</td>
+                                    }
+                                    <td class="num">@Money(item.MontoPagado)</td>
+                                    <td class="num">@Money(item.MontoDeuda)</td>
+                                    <td class="num">@Money(item.MontoTotal)</td>
                                 }
-                                <td class="num">@Money(item.MontoPagado)</td>
-                                <td class="num">@Money(item.MontoDeuda)</td>
-                                <td class="num">@Money(item.MontoTotal)</td>
                             </tr>
                         }
                     }

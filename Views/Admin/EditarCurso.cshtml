@@ -118,13 +118,13 @@
                             <div>
                                 <label asp-for="ConfiguracionCurso.CostoPersonalInsnsb" class="form-label">Costo INSNSB para la logica interna</label>
                                 <input asp-for="ConfiguracionCurso.CostoPersonalInsnsb" class="form-control" type="number" step="0.01" min="0" inputmode="decimal" />
-                                <small class="admin-field-help">Monto usado cuando el alumno valida codigo INSNSB. Puede ser 0.</small>
+                                <small class="admin-field-help">Monto usado cuando el alumno valida código INSNSB. Puede ser 0.</small>
                                 <span asp-validation-for="ConfiguracionCurso.CostoPersonalInsnsb" class="text-danger"></span>
                             </div>
                             <div>
                                 <label asp-for="ConfiguracionCurso.CelularContactoActividad" class="form-label">Celular de contacto</label>
                                 <input asp-for="ConfiguracionCurso.CelularContactoActividad" class="form-control" type="tel" maxlength="30" inputmode="tel" placeholder="+51 913 452 763" />
-                                <small class="admin-field-help">Numero mostrado en la tarifa INSNSB. Incluye codigo de pais si aplica.</small>
+                                <small class="admin-field-help">Numero mostrado en la tarifa INSNSB. Incluye código de pais si aplica.</small>
                                 <span asp-validation-for="ConfiguracionCurso.CelularContactoActividad" class="text-danger"></span>
                             </div>
                             <div>
@@ -206,6 +206,15 @@
                                 </select>
                                 <small class="admin-field-help">Recomendado: Si, para evitar registros duplicados del mismo alumno.</small>
                                 <span asp-validation-for="ConfiguracionCurso.RestriccionInscripcionUnica" class="text-danger"></span>
+                            </div>
+                            <div>
+                                <label asp-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="form-label">Preguntar asistencia presencial al primer dia</label>
+                                <select asp-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="form-select">
+                                    <option value="No">No</option>
+                                    <option value="Si">Si</option>
+                                </select>
+                                <small class="admin-field-help">Usalo cuando se necesite confirmar si el alumno asistira presencialmente al inicio del curso.</small>
+                                <span asp-validation-for="ConfiguracionCurso.SolicitaConfirmacionPresencialPrimerDia" class="text-danger"></span>
                             </div>
                         </div>
 

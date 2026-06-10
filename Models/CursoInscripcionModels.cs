@@ -28,6 +28,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string? UrlBannerWeb { get; set; }
         public string? UrlProgramaWeb { get; set; }
         public bool RestriccionInscripcionUnica { get; set; }
+        public bool SolicitaConfirmacionPresencialPrimerDia { get; set; }
+        public bool EsGratisGlobal => string.Equals(SeCobra, "No", StringComparison.OrdinalIgnoreCase);
+        public bool TieneLogicaCobro => string.Equals(SeCobra, "Si", StringComparison.OrdinalIgnoreCase);
+        public bool RequierePago(decimal costoFinal) => TieneLogicaCobro && costoFinal > 0m;
     }
 
     public sealed class PaginaInscripcionCursosViewModel
@@ -115,6 +119,8 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public int? NumeroCuotas { get; set; }
 
         public bool AceptaTratamientoDatos { get; set; }
+
+        public bool? AsistiraPresencialPrimerDia { get; set; }
     }
 
     public sealed class ResultadoRegistroInscripcion
@@ -278,7 +284,16 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string? UrlComprobantePdfIzipay { get; init; }
         public string? VolverUrl { get; init; }
         public bool PuedePagarAhora { get; init; }
+        public bool PermitePagoDemo { get; init; }
         public string? BloqueoPagoMensaje { get; init; }
+    }
+
+    public sealed class ReservaPagoIzipayResultado
+    {
+        public string EstadoReserva { get; init; } = "NO_DISPONIBLE";
+        public PagoDemoViewModel? Pago { get; init; }
+        public bool ReservadoParaCrear => string.Equals(EstadoReserva, "RESERVADO", StringComparison.OrdinalIgnoreCase);
+        public bool EnProceso => string.Equals(EstadoReserva, "EN_PROCESO", StringComparison.OrdinalIgnoreCase);
     }
 
     public sealed class AdminSeguimientoPagoAlumnoItem
@@ -406,6 +421,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         [Required(ErrorMessage = "Debe indicar si aplica inscripcion unica.")]
         [RegularExpression("^(Si|No)$", ErrorMessage = "La restriccion de inscripcion unica debe ser Si o No.")]
         public string RestriccionInscripcionUnica { get; set; } = "No";
+
+        [Required(ErrorMessage = "Debe indicar si se preguntara asistencia presencial al primer dia.")]
+        [RegularExpression("^(Si|No)$", ErrorMessage = "La confirmacion presencial debe ser Si o No.")]
+        public string SolicitaConfirmacionPresencialPrimerDia { get; set; } = "No";
     }
 
     public sealed class CodigoInsnsbAdminItem
@@ -467,6 +486,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public int PagadosParciales { get; init; }
         public int Pendientes { get; init; }
         public int SinCobro { get; init; }
+        public bool SolicitaConfirmacionPresencialPrimerDia { get; init; }
+        public int AsistiranPresencialPrimerDia { get; init; }
+        public int NoAsistiranPresencialPrimerDia { get; init; }
+        public int SinRespuestaPresencialPrimerDia { get; init; }
         public decimal MontoPagado { get; init; }
         public decimal MontoDeuda { get; init; }
         public decimal MontoTotal { get; init; }
@@ -489,6 +512,7 @@ namespace CURSO_INTERCULTURALIDAD.Models
 
     public sealed class ReporteInscritosCursoDetalle
     {
+        public bool CursoTieneCobro { get; set; }
         public ReporteInscritosCursoResumen Resumen { get; init; } = new();
         public IReadOnlyList<ReporteInscritosAgrupacionItem> PorPais { get; init; } = [];
         public IReadOnlyList<ReporteInscritosAgrupacionItem> PorRegion { get; init; } = [];
@@ -519,6 +543,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string InstitucionProcedencia { get; init; } = string.Empty;
         public string CondicionLaboralInsnsb { get; init; } = string.Empty;
         public string MedioComunicacion { get; init; } = string.Empty;
+        public bool? AsistiraPresencialPrimerDia { get; init; }
+        public string AsistiraPresencialPrimerDiaEtiqueta => AsistiraPresencialPrimerDia.HasValue
+            ? (AsistiraPresencialPrimerDia.Value ? "Si" : "No")
+            : "Sin respuesta";
         public DateTime FechaRegistro { get; init; }
         public decimal CostoFinal { get; init; }
         public int NumeroCuotas { get; init; }
@@ -549,6 +577,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public string Correo { get; init; } = string.Empty;
         public string Celular { get; init; } = string.Empty;
         public string InstitucionProcedencia { get; init; } = string.Empty;
+        public bool? AsistiraPresencialPrimerDia { get; init; }
+        public string AsistiraPresencialPrimerDiaEtiqueta => AsistiraPresencialPrimerDia.HasValue
+            ? (AsistiraPresencialPrimerDia.Value ? "Si" : "No")
+            : "Sin respuesta";
         public DateTime FechaRegistro { get; init; }
         public DateTime? FechaUltimoPago { get; init; }
         public decimal CostoFinal { get; init; }
@@ -573,6 +605,10 @@ namespace CURSO_INTERCULTURALIDAD.Models
         public int PagadosParciales { get; init; }
         public int Pendientes { get; init; }
         public int SinCobro { get; init; }
+        public bool SolicitaConfirmacionPresencialPrimerDia { get; init; }
+        public int AsistiranPresencialPrimerDia { get; init; }
+        public int NoAsistiranPresencialPrimerDia { get; init; }
+        public int SinRespuestaPresencialPrimerDia { get; init; }
         public decimal MontoPagadoTotal { get; init; }
         public decimal MontoPendienteTotal { get; init; }
         public decimal MontoComprometidoTotal { get; init; }
